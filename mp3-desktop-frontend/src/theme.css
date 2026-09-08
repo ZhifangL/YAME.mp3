@@ -1,0 +1,48 @@
+/* TagForge design tokens — taken from the Penpot "NoSkillTrial" board. */
+:root {
+  /* purple */
+  --purple-primary: #6d28d9;
+  --purple-accent: #7c3aed;
+  --purple-tint: #eee9fd;
+  --purple-deep: #5b21b6;
+
+  /* surfaces */
+  --surface-0: #f2f2f7; /* app chrome background */
+  --surface-1: #ffffff; /* cards, inputs */
+  --surface-2: #fafafb; /* table header, footer */
+  --surface-3: #ececef; /* scrollbar track */
+  --surface-4: #f4f4f6; /* sidebar background */
+
+  /* borders */
+  --border-subtle: #e5e5ea;
+  --border-strong: #d9d9e0;
+  --border-input: #d8d8dc;
+  --border-panel: #d1d1d6;
+
+  /* text */
+  --text-main: #1c1c1e;
+  --text-muted: #8e8e93;
+  --text-disabled: #aeaeb2;
+  --text-inverse: #ffffff;
+
+  /* traffic lights + status */
+  --mac-red: #ff5f57;
+  --mac-yellow: #febc2e;
+  --mac-green: #28c840;
+  --toggle-green: #22c55e;
+  --danger: #e5484d;
+
+  /* metrics */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  --shadow-panel: 0 6px 24px rgba(28, 28, 30, 0.18), 0 2px 6px rgba(28, 28, 30, 0.1);
+  --shadow-modal: 0 12px 48px rgba(28, 28, 30, 0.3), 0 2px 10px rgba(28, 28, 30, 0.16);
+  --shadow-button: 0 1px 2px rgba(28, 28, 30, 0.12);
+
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Segoe UI',
+    system-ui, Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
