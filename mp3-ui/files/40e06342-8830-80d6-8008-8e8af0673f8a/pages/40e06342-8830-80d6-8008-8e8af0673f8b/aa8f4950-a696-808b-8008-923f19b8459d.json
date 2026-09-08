@@ -1,0 +1,107 @@
+{
+  "id": "aa8f4950-a696-808b-8008-923f19b8459d",
+  "name": "Panel \/ Selected Song Data",
+  "type": "frame",
+  "x": 1270,
+  "y": 556,
+  "width": 292,
+  "height": 400,
+  "rotation": 0,
+  "selrect": {
+    "x": 1270,
+    "y": 556,
+    "width": 292,
+    "height": 400,
+    "x1": 1270,
+    "y1": 556,
+    "x2": 1562,
+    "y2": 956
+  },
+  "points": [
+    {
+      "x": 1270,
+      "y": 556
+    },
+    {
+      "x": 1562,
+      "y": 556
+    },
+    {
+      "x": 1562,
+      "y": 956
+    },
+    {
+      "x": 1270,
+      "y": 956
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "02184619-eebc-80a0-8008-903acd9a02d8",
+  "frameId": "02184619-eebc-80a0-8008-903acd9a02d8",
+  "flipX": null,
+  "flipY": null,
+  "hideFillOnExport": false,
+  "hideInViewer": true,
+  "r2": 24,
+  "proportionLock": false,
+  "pageId": "40e06342-8830-80d6-8008-8e8af0673f8b",
+  "r3": 24,
+  "constraintsV": "top",
+  "constraintsH": "left",
+  "r1": 24,
+  "appliedTokens": {},
+  "strokes": [
+    {
+      "strokeStyle": "solid",
+      "strokeAlignment": "inner",
+      "strokeWidth": 1,
+      "strokeColor": "#d1d1d6",
+      "strokeOpacity": 1
+    }
+  ],
+  "proportion": 1,
+  "shadow": [
+    {
+      "id": "c23a841e-9027-8033-8008-91120b196f3f",
+      "style": "drop-shadow",
+      "color": {
+        "color": "#000000",
+        "opacity": 0.2
+      },
+      "offsetX": 0,
+      "offsetY": 14,
+      "blur": 40,
+      "spread": 0,
+      "hidden": false
+    }
+  ],
+  "r4": 24,
+  "fills": [
+    {
+      "fillColor": "#e7e7ea",
+      "fillOpacity": 1
+    }
+  ],
+  "shapes": [
+    "aa8f4950-a696-808b-8008-923ee802e0cf",
+    "aa8f4950-a696-808b-8008-923ee802e0d3",
+    "aa8f4950-a696-808b-8008-923ee802e0d7",
+    "aa8f4950-a696-808b-8008-9247884ffa09",
+    "aa8f4950-a696-808b-8008-923efa45b0d5"
+  ]
+}

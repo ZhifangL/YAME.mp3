@@ -1,0 +1,84 @@
+{
+  "id": "e7b4b0e1-370b-11ed-8742-15e8db9d5ab2",
+  "name": "speaker-loud",
+  "type": "frame",
+  "x": 50.0,
+  "y": 5734.0,
+  "width": 15,
+  "height": 15,
+  "rotation": null,
+  "selrect": {
+    "x": 50.0,
+    "y": 5734.0,
+    "width": 15,
+    "height": 15,
+    "x1": 50.0,
+    "y1": 5734.0,
+    "x2": 65.0,
+    "y2": 5749.0
+  },
+  "points": [
+    {
+      "x": 50.0,
+      "y": 5734.0
+    },
+    {
+      "x": 65.0,
+      "y": 5734.0
+    },
+    {
+      "x": 65.0,
+      "y": 5749.0
+    },
+    {
+      "x": 50.0,
+      "y": 5749.0
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "3849bc3d-4437-8019-8004-fc65dba0609f",
+  "frameId": "3849bc3d-4437-8019-8004-fc65dba0609f",
+  "flipX": null,
+  "flipY": null,
+  "rx": 0,
+  "index": null,
+  "hideInViewer": true,
+  "svgAttrs": {
+    "width": "15",
+    "height": "15"
+  },
+  "r2": 0,
+  "componentRoot": true,
+  "showContent": true,
+  "proportionLock": false,
+  "index": 1,
+  "pageId": "3849bc3d-4437-8019-8004-fc65db9afe59",
+  "r3": 0,
+  "r1": 0,
+  "componentId": "e7b4b0e1-370b-11ed-8742-15e8db9d5ab2",
+  "mainInstance": true,
+  "proportion": 1,
+  "r4": 0,
+  "fills": [],
+  "ry": 0,
+  "componentFile": "40e06342-8830-80d6-8008-9251c5d8cc8c",
+  "shapes": [
+    "e7b4b0e2-370b-11ed-8742-15e8db9d5ab2",
+    "e7b4b0e3-370b-11ed-8742-15e8db9d5ab2"
+  ]
+}

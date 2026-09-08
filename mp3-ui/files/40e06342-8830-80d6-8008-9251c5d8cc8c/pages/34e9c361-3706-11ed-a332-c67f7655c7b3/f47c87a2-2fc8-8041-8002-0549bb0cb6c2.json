@@ -1,0 +1,87 @@
+{
+  "id": "f47c87a2-2fc8-8041-8002-0549bb0cb6c2",
+  "name": "Board",
+  "type": "frame",
+  "x": -1420,
+  "y": 77,
+  "width": 1394,
+  "height": 724.0000000000001,
+  "rotation": 0,
+  "selrect": {
+    "x": -1420,
+    "y": 77,
+    "width": 1394,
+    "height": 724.0000000000001,
+    "x1": -1420,
+    "y1": 77,
+    "x2": -26,
+    "y2": 801.0000000000001
+  },
+  "points": [
+    {
+      "x": -1420,
+      "y": 77
+    },
+    {
+      "x": -26,
+      "y": 77
+    },
+    {
+      "x": -26,
+      "y": 801.0000000000001
+    },
+    {
+      "x": -1420,
+      "y": 801.0000000000001
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "00000000-0000-0000-0000-000000000000",
+  "frameId": "00000000-0000-0000-0000-000000000000",
+  "flipX": null,
+  "flipY": null,
+  "hideFillOnExport": false,
+  "rx": 0,
+  "growType": "fixed",
+  "index": null,
+  "strokeStyle": "none",
+  "strokeColor": "#000000",
+  "strokeOpacity": 0,
+  "strokeAlignment": "center",
+  "r2": 0,
+  "layoutItemHSizing": "fix",
+  "proportionLock": false,
+  "pageId": "34e9c361-3706-11ed-a332-c67f7655c7b3",
+  "layoutItemVSizing": "fix",
+  "r3": 0,
+  "strokeWidth": 0,
+  "r1": 0,
+  "strokes": [],
+  "proportion": 1,
+  "r4": 0,
+  "fills": [
+    {
+      "fillColor": "#FFFFFF",
+      "fillOpacity": 1
+    }
+  ],
+  "ry": 0,
+  "shapes": [
+    "f47c87a2-2fc8-8041-8002-0549c9095a2d"
+  ]
+}

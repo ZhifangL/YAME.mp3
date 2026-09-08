@@ -1,0 +1,68 @@
+{
+  "id": "aa8f4950-a696-808b-8008-923e5dc40737",
+  "name": "Footer \/ Scrollbar",
+  "type": "group",
+  "x": 1586,
+  "y": 90,
+  "width": 6,
+  "height": 480,
+  "rotation": 0,
+  "selrect": {
+    "x": 1586,
+    "y": 90,
+    "width": 6,
+    "height": 480,
+    "x1": 1586,
+    "y1": 90,
+    "x2": 1592,
+    "y2": 570
+  },
+  "points": [
+    {
+      "x": 1586,
+      "y": 90
+    },
+    {
+      "x": 1592,
+      "y": 90
+    },
+    {
+      "x": 1592,
+      "y": 570
+    },
+    {
+      "x": 1586,
+      "y": 570
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "aa8f4950-a696-808b-8008-923e5dcb35af",
+  "frameId": "02184619-eebc-80a0-8008-903acd9a02d8",
+  "flipX": null,
+  "flipY": null,
+  "index": 166,
+  "proportionLock": false,
+  "strokes": [],
+  "proportion": 1,
+  "fills": [],
+  "shapes": [
+    "02184619-eebc-80a0-8008-903b237f4db5",
+    "02184619-eebc-80a0-8008-903b238c657a"
+  ],
+  "pageId": "40e06342-8830-80d6-8008-8e8af0673f8b"
+}

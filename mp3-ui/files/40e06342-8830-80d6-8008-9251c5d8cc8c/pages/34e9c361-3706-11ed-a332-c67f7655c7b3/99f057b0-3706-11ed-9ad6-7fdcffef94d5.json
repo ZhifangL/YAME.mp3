@@ -1,0 +1,89 @@
+{
+  "id": "99f057b0-3706-11ed-9ad6-7fdcffef94d5",
+  "name": "arrow-bottom-left",
+  "type": "frame",
+  "x": 521.999995992915,
+  "y": 1518.0000030888589,
+  "width": 15.00000003622631,
+  "height": 15.000000076166998,
+  "rotation": 0,
+  "selrect": {
+    "x": 521.999995992915,
+    "y": 1518.0000030888589,
+    "width": 15.00000003622631,
+    "height": 15.000000076166998,
+    "x1": 521.999995992915,
+    "y1": 1518.0000030888589,
+    "x2": 536.9999960291414,
+    "y2": 1533.0000031650259
+  },
+  "points": [
+    {
+      "x": 521.999995992915,
+      "y": 1518.0000030888589
+    },
+    {
+      "x": 536.9999959929146,
+      "y": 1518.0000031650259
+    },
+    {
+      "x": 536.9999960291414,
+      "y": 1533.0000031650259
+    },
+    {
+      "x": 521.9999960291418,
+      "y": 1533.0000030888593
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 8.728898132248298E-9,
+    "c": -8.728898132248298E-9,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 0.9999999999999996,
+    "b": -8.728898132248289E-9,
+    "c": 8.728898132248289E-9,
+    "d": 0.9999999999999996,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "frameId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "flipX": null,
+  "flipY": null,
+  "rx": 0,
+  "index": null,
+  "hideInViewer": true,
+  "svgAttrs": {
+    "width": "15",
+    "height": "15"
+  },
+  "touched": [
+    "layer-effects-group"
+  ],
+  "r2": 0,
+  "componentRoot": true,
+  "shapeRef": "86a38f20-370a-11ed-8742-15e8db9d5ab2",
+  "showContent": true,
+  "proportionLock": false,
+  "pageId": "34e9c361-3706-11ed-a332-c67f7655c7b3",
+  "r3": 0,
+  "constraintsV": "top",
+  "constraintsH": "left",
+  "r1": 0,
+  "opacity": 0.3,
+  "componentId": "86a38f20-370a-11ed-8742-15e8db9d5ab2",
+  "proportion": 1,
+  "r4": 0,
+  "fills": [],
+  "ry": 0,
+  "componentFile": "40e06342-8830-80d6-8008-9251c5d8cc8c",
+  "shapes": [
+    "99f07ec0-3706-11ed-9ad6-7fdcffef94d5",
+    "99f11b00-3706-11ed-9ad6-7fdcffef94d5"
+  ]
+}

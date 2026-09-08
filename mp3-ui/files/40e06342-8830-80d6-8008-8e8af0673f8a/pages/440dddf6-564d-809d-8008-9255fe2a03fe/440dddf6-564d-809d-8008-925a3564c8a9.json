@@ -1,0 +1,69 @@
+{
+  "id": "440dddf6-564d-809d-8008-925a3564c8a9",
+  "name": "Field \/ Artist",
+  "type": "group",
+  "x": 532,
+  "y": 317,
+  "width": 282,
+  "height": 30,
+  "rotation": 0,
+  "selrect": {
+    "x": 532,
+    "y": 317,
+    "width": 282,
+    "height": 30,
+    "x1": 532,
+    "y1": 317,
+    "x2": 814,
+    "y2": 347
+  },
+  "points": [
+    {
+      "x": 532,
+      "y": 317
+    },
+    {
+      "x": 814,
+      "y": 317
+    },
+    {
+      "x": 814,
+      "y": 347
+    },
+    {
+      "x": 532,
+      "y": 347
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "440dddf6-564d-809d-8008-925a35cc011d",
+  "frameId": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "flipX": false,
+  "flipY": false,
+  "index": 10,
+  "proportionLock": false,
+  "strokes": [],
+  "proportion": 1,
+  "fills": [],
+  "shapes": [
+    "440dddf6-564d-809d-8008-9259b77c66c2",
+    "440dddf6-564d-809d-8008-9259b79be8ed",
+    "440dddf6-564d-809d-8008-9259b7b46892"
+  ],
+  "pageId": "440dddf6-564d-809d-8008-9255fe2a03fe"
+}

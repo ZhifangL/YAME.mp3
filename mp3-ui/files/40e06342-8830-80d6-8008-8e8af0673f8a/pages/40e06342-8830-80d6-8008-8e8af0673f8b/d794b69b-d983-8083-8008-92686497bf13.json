@@ -1,0 +1,146 @@
+{
+  "id": "d794b69b-d983-8083-8008-92686497bf13",
+  "name": "Text",
+  "type": "text",
+  "x": 32,
+  "y": 109,
+  "width": 22,
+  "height": 12,
+  "rotation": 0,
+  "selrect": {
+    "x": 32,
+    "y": 109,
+    "width": 22,
+    "height": 12,
+    "x1": 32,
+    "y1": 109,
+    "x2": 54,
+    "y2": 121
+  },
+  "points": [
+    {
+      "x": 32,
+      "y": 109
+    },
+    {
+      "x": 54,
+      "y": 109
+    },
+    {
+      "x": 54,
+      "y": 121
+    },
+    {
+      "x": 32,
+      "y": 121
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "d794b69b-d983-8083-8008-92686497bf12",
+  "frameId": "02184619-eebc-80a0-8008-903acd9a02d8",
+  "flipX": null,
+  "flipY": null,
+  "growType": "auto-width",
+  "content": {
+    "type": "root",
+    "children": [
+      {
+        "type": "paragraph-set",
+        "children": [
+          {
+            "lineHeight": "1.2",
+            "fontStyle": "normal",
+            "children": [
+              {
+                "lineHeight": "1.2",
+                "fontStyle": "normal",
+                "textTransform": "none",
+                "textAlign": "left",
+                "fontId": "gfont-inter",
+                "fontSize": "10",
+                "fontWeight": "600",
+                "textDirection": "ltr",
+                "fontVariantId": "600",
+                "textDecoration": "none",
+                "letterSpacing": "0",
+                "fills": [
+                  {
+                    "fillColor": "#aeaeb2",
+                    "fillOpacity": 1
+                  }
+                ],
+                "fontFamily": "Inter",
+                "text": "Rule"
+              }
+            ],
+            "textTransform": "none",
+            "textAlign": "left",
+            "fontId": "gfont-inter",
+            "key": "cd1t8",
+            "fontSize": "10",
+            "fontWeight": "600",
+            "textDirection": "ltr",
+            "type": "paragraph",
+            "fontVariantId": "600",
+            "textDecoration": "none",
+            "letterSpacing": "0",
+            "fills": [
+              {
+                "fillColor": "#aeaeb2",
+                "fillOpacity": 1
+              }
+            ],
+            "fontFamily": "Inter"
+          }
+        ]
+      }
+    ]
+  },
+  "constraintsV": "scale",
+  "constraintsH": "scale",
+  "positionData": [
+    {
+      "x": 32,
+      "y": 121.25,
+      "width": 21.166671752929688,
+      "height": 12.5,
+      "x1": 0,
+      "y1": -0.25,
+      "x2": 21.166671752929688,
+      "y2": 12.25,
+      "fontStyle": "normal",
+      "textTransform": "none",
+      "fontSize": "10px",
+      "fontWeight": "600",
+      "textDecoration": "none",
+      "letterSpacing": "normal",
+      "fills": [
+        {
+          "fillColor": "#aeaeb2",
+          "fillOpacity": 1
+        }
+      ],
+      "direction": "ltr",
+      "fontFamily": "\"Inter\"",
+      "text": "Rule"
+    }
+  ],
+  "strokes": [],
+  "fills": [],
+  "pageId": "40e06342-8830-80d6-8008-8e8af0673f8b"
+}

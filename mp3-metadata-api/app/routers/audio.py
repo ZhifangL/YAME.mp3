@@ -1,0 +1,186 @@
+"""Metadata + rules + presets endpoints.
+
+The frontend talks to this router over localhost. In the final Tauri
+package this same FastAPI app runs as the Python sidecar.
+"""
+from __future__ import annotations
+
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
+
+from app.fields import RULE_FIELDS
+from app.schemas import (
+    ApplyRequest,
+    ApplyResponse,
+    CoverWriteRequest,
+    MetadataResponse,
+    PresetImportRequest,
+    PresetModel,
+    PresetUpsertRequest,
+    PreviewRequest,
+    PreviewResponse,
+    RegistryResponse,
+    TrackWriteRequest,
+    TrackWriteResponse,
+    TracksReadRequest,
+    TracksReadResponse,
+)
+from app.services.audio_io import (
+    MetadataError,
+    apply_ruleset,
+    read_track,
+    remove_cover,
+    write_cover,
+    write_fields,
+)
+from app.services.presets import delete_preset, list_presets, save_preset
+from app.services.rules import REGISTRY, RuleContext, registry_specs
+
+router = APIRouter(tags=["audio"])
+
+
+@router.get("/api/rules/registry", response_model=RegistryResponse, tags=["rules"])
+def rules_registry():
+    """Self-describing rule catalog + field catalog for the rule editors."""
+    return {"specs": registry_specs(), "fields": RULE_FIELDS}
+
+
+@router.get(
+    "/api/metadata",
+    response_model=MetadataResponse,
+    summary="Read metadata of one audio file",
+)
+def get_metadata(
+    path: str = Query(..., description="Absolute path of the audio file to read."),
+):
+    try:
+        return read_track(path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MetadataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post(
+    "/api/tracks/read",
+    response_model=TracksReadResponse,
+    summary="Read metadata of many audio files at once",
+)
+def read_tracks(request: TracksReadRequest):
+    tracks = []
+    errors = []
+    for path in request.paths:
+        try:
+            tracks.append(read_track(path))
+        except (FileNotFoundError, MetadataError) as exc:
+            errors.append({"path": path, "error": str(exc)})
+    return {"tracks": tracks, "errors": errors}
+
+
+@router.post(
+    "/api/tracks/write",
+    response_model=TrackWriteResponse,
+    summary="Write metadata fields of one audio file",
+)
+def write_track(request: TrackWriteRequest):
+    try:
+        warnings = write_fields(request.path, request.fields, rename_to=request.rename_to)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MetadataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        track = read_track(request.path if not request.rename_to else str(__import__("pathlib").Path(request.path).parent / (request.rename_to if "." in request.rename_to else request.rename_to + __import__("pathlib").Path(request.path).suffix)))
+    except (FileNotFoundError, MetadataError):
+        track = None
+    return {"track": track, "warnings": warnings}
+
+
+@router.post(
+    "/api/tracks/cover",
+    response_model=TrackWriteResponse,
+    summary="Replace the embedded cover art of one audio file",
+)
+def set_cover(request: CoverWriteRequest):
+    try:
+        if request.remove:
+            warnings = remove_cover(request.path)
+        else:
+            warnings = write_cover(request.path, request.mime, request.data_base64)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MetadataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        track = read_track(request.path)
+    except (FileNotFoundError, MetadataError):
+        track = None
+    return {"track": track, "warnings": warnings}
+
+
+@router.post(
+    "/api/preview",
+    response_model=PreviewResponse,
+    summary="Dry-run one rule against given field values (never touches files)",
+)
+def preview(request: PreviewRequest):
+    rule_type = request.rule.type
+    cls = REGISTRY.get(rule_type)
+    if cls is None:
+        raise HTTPException(status_code=400, detail="Unknown rule type: " + rule_type)
+    ctx = RuleContext(
+        fields=request.fields,
+        filename=request.filename,
+        parent_dir=request.folder,
+        path=(request.folder.rstrip("/") + "/" + request.filename) if request.folder else request.filename,
+    )
+    changes = cls().apply(ctx, request.rule.params or {})
+    fields = {**request.fields, **{c["field"]: c["after"] for c in changes}}
+    return {"changes": changes, "fields": fields, "filename": ctx.filename}
+
+
+@router.post(
+    "/api/apply",
+    response_model=ApplyResponse,
+    summary="Run a ruleset over many files (dry_run computes changes only)",
+)
+def apply(request: ApplyRequest):
+    if not request.paths:
+        raise HTTPException(status_code=400, detail="No files selected.")
+    if not request.ruleset.rules:
+        raise HTTPException(status_code=400, detail="The ruleset has no rules.")
+    return apply_ruleset(
+        request.paths,
+        {"name": request.ruleset.name, "rules": [r.model_dump() for r in request.ruleset.rules]},
+        dry_run=request.dry_run,
+    )
+
+
+@router.get("/api/presets", response_model=list[PresetModel], tags=["presets"])
+def presets():
+    return list_presets()
+
+
+@router.put("/api/presets", response_model=PresetModel, tags=["presets"])
+def upsert_preset(request: PresetUpsertRequest):
+    return save_preset(request.name, request.ruleset.model_dump(), preset_id=request.preset_id)
+
+
+@router.delete("/api/presets/{preset_id}", tags=["presets"])
+def remove_preset(preset_id: str):
+    if not delete_preset(preset_id):
+        raise HTTPException(status_code=404, detail="Preset not found.")
+    return {"deleted": preset_id}
+
+
+@router.post("/api/presets/import", response_model=list[PresetModel], tags=["presets"])
+def import_presets(request: PresetImportRequest):
+    """Import presets from an exported TagForge presets file."""
+    imported = []
+    for entry in request.presets:
+        if not isinstance(entry, dict) or not entry.get("name"):
+            continue
+        ruleset = entry.get("ruleset") or {"name": entry.get("name"), "rules": []}
+        imported.append(save_preset(str(entry["name"]), ruleset, preset_id=entry.get("id")))
+    return imported

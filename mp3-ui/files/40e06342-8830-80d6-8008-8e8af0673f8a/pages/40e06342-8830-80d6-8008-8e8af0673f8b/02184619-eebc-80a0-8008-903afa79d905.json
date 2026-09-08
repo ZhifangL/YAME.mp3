@@ -1,0 +1,147 @@
+{
+  "id": "02184619-eebc-80a0-8008-903afa79d905",
+  "name": "Text",
+  "type": "text",
+  "x": 69,
+  "y": 436,
+  "width": 178,
+  "height": 14,
+  "rotation": 0,
+  "selrect": {
+    "x": 69,
+    "y": 436,
+    "width": 178,
+    "height": 14,
+    "x1": 69,
+    "y1": 436,
+    "x2": 247,
+    "y2": 450
+  },
+  "points": [
+    {
+      "x": 69,
+      "y": 436
+    },
+    {
+      "x": 247,
+      "y": 436
+    },
+    {
+      "x": 247,
+      "y": 450
+    },
+    {
+      "x": 69,
+      "y": 450
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "aa8f4950-a696-808b-8008-923e5e7d21fa",
+  "frameId": "02184619-eebc-80a0-8008-903acd9a02d8",
+  "flipX": null,
+  "flipY": null,
+  "growType": "auto-width",
+  "content": {
+    "type": "root",
+    "children": [
+      {
+        "type": "paragraph-set",
+        "children": [
+          {
+            "lineHeight": "1.2",
+            "fontStyle": "normal",
+            "children": [
+              {
+                "lineHeight": "1.2",
+                "fontStyle": "normal",
+                "typographyRefId": null,
+                "textTransform": "none",
+                "textAlign": "left",
+                "fontId": "gfont-inter",
+                "fontSize": "11.5",
+                "fontWeight": "500",
+                "typographyRefFile": null,
+                "textDirection": "ltr",
+                "fontVariantId": "500",
+                "textDecoration": "none",
+                "letterSpacing": "0",
+                "fills": [
+                  {
+                    "fillColor": "#1c1c1e",
+                    "fillOpacity": 1
+                  }
+                ],
+                "fontFamily": "Inter",
+                "text": "Replace  \" - \"  with  \" \u2013 \"  in  Title"
+              }
+            ],
+            "typographyRefId": null,
+            "textTransform": "none",
+            "textAlign": "left",
+            "fontId": "gfont-inter",
+            "fontSize": "11.5",
+            "fontWeight": "500",
+            "typographyRefFile": null,
+            "textDirection": "ltr",
+            "type": "paragraph",
+            "fontVariantId": "500",
+            "textDecoration": "none",
+            "letterSpacing": "0",
+            "fills": [
+              {
+                "fillColor": "#1c1c1e",
+                "fillOpacity": 1
+              }
+            ],
+            "fontFamily": "Inter"
+          }
+        ]
+      }
+    ]
+  },
+  "constraintsV": "scale",
+  "constraintsH": "scale",
+  "positionData": [
+    {
+      "x": 69,
+      "y": 450.1499938964844,
+      "width": 177.76666259765625,
+      "height": 14.5,
+      "x1": 0,
+      "y1": -0.350006103515625,
+      "x2": 177.76666259765625,
+      "y2": 14.149993896484375,
+      "fontStyle": "normal",
+      "textTransform": "none",
+      "fontSize": "11.5px",
+      "fontWeight": "500",
+      "textDecoration": "none",
+      "letterSpacing": "normal",
+      "fills": [
+        {
+          "fillColor": "#1c1c1e",
+          "fillOpacity": 1
+        }
+      ],
+      "direction": "ltr",
+      "fontFamily": "\"Inter\"",
+      "text": "Replace  \" - \"  with  \" \u2013 \"  in  Title"
+    }
+  ],
+  "pageId": "40e06342-8830-80d6-8008-8e8af0673f8b"
+}

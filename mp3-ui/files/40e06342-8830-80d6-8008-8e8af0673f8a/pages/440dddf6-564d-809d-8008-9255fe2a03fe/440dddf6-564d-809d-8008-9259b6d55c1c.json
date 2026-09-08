@@ -1,0 +1,147 @@
+{
+  "id": "440dddf6-564d-809d-8008-9259b6d55c1c",
+  "name": "Field \/ Value Filename",
+  "type": "text",
+  "x": 632,
+  "y": 258,
+  "width": 136,
+  "height": 15,
+  "rotation": 0,
+  "selrect": {
+    "x": 632,
+    "y": 258,
+    "width": 136,
+    "height": 15,
+    "x1": 632,
+    "y1": 258,
+    "x2": 768,
+    "y2": 273
+  },
+  "points": [
+    {
+      "x": 632,
+      "y": 258
+    },
+    {
+      "x": 768,
+      "y": 258
+    },
+    {
+      "x": 768,
+      "y": 273
+    },
+    {
+      "x": 632,
+      "y": 273
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "440dddf6-564d-809d-8008-925a35323a8e",
+  "frameId": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "flipX": null,
+  "flipY": null,
+  "growType": "auto-width",
+  "content": {
+    "type": "root",
+    "children": [
+      {
+        "type": "paragraph-set",
+        "children": [
+          {
+            "lineHeight": "1.2",
+            "fontStyle": "normal",
+            "children": [
+              {
+                "lineHeight": "1.2",
+                "fontStyle": "normal",
+                "typographyRefId": null,
+                "textTransform": "none",
+                "textAlign": "left",
+                "fontId": "gfont-inter",
+                "fontSize": "12",
+                "fontWeight": "400",
+                "typographyRefFile": null,
+                "textDirection": "ltr",
+                "fontVariantId": "regular",
+                "textDecoration": "none",
+                "letterSpacing": "0",
+                "fills": [
+                  {
+                    "fillColor": "#1c1c1e",
+                    "fillOpacity": 1
+                  }
+                ],
+                "fontFamily": "Inter",
+                "text": "Odo (128kbit_AAC).mp3"
+              }
+            ],
+            "typographyRefId": null,
+            "textTransform": "none",
+            "textAlign": "left",
+            "fontId": "gfont-inter",
+            "fontSize": "12",
+            "fontWeight": "400",
+            "typographyRefFile": null,
+            "textDirection": "ltr",
+            "type": "paragraph",
+            "fontVariantId": "regular",
+            "textDecoration": "none",
+            "letterSpacing": "0",
+            "fills": [
+              {
+                "fillColor": "#1c1c1e",
+                "fillOpacity": 1
+              }
+            ],
+            "fontFamily": "Inter"
+          }
+        ]
+      }
+    ]
+  },
+  "constraintsV": "scale",
+  "constraintsH": "scale",
+  "positionData": [
+    {
+      "x": 632,
+      "y": 272.6999969482422,
+      "width": 135.5500030517578,
+      "height": 15,
+      "x1": 0,
+      "y1": -0.3000030517578125,
+      "x2": 135.5500030517578,
+      "y2": 14.699996948242188,
+      "fontStyle": "normal",
+      "textTransform": "none",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "textDecoration": "none",
+      "letterSpacing": "normal",
+      "fills": [
+        {
+          "fillColor": "#1c1c1e",
+          "fillOpacity": 1
+        }
+      ],
+      "direction": "ltr",
+      "fontFamily": "\"Inter\"",
+      "text": "Odo (128kbit_AAC).mp3"
+    }
+  ],
+  "pageId": "440dddf6-564d-809d-8008-9255fe2a03fe"
+}

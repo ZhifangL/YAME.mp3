@@ -1,0 +1,94 @@
+{
+  "id": "9aaace10-3706-11ed-9ad6-7fdcffef94d5",
+  "name": "border-all",
+  "type": "frame",
+  "x": 571.9999972942431,
+  "y": 1168.0000034347622,
+  "width": 15.000000036226083,
+  "height": 15.000000076166543,
+  "rotation": 0,
+  "selrect": {
+    "x": 571.9999972942431,
+    "y": 1168.0000034347622,
+    "width": 15.000000036226083,
+    "height": 15.000000076166543,
+    "x1": 571.9999972942431,
+    "y1": 1168.0000034347622,
+    "x2": 586.9999973304692,
+    "y2": 1183.0000035109288
+  },
+  "points": [
+    {
+      "x": 571.9999972942431,
+      "y": 1168.0000034347622
+    },
+    {
+      "x": 586.9999972942425,
+      "y": 1168.000003510929
+    },
+    {
+      "x": 586.9999973304692,
+      "y": 1183.0000035109288
+    },
+    {
+      "x": 571.9999973304699,
+      "y": 1183.000003434762
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 8.728898132248298E-9,
+    "c": -8.728898132248298E-9,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 0.9999999999999996,
+    "b": -8.728898132248289E-9,
+    "c": 8.728898132248289E-9,
+    "d": 0.9999999999999996,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "frameId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "flipX": null,
+  "flipY": null,
+  "rx": 0,
+  "index": null,
+  "hideInViewer": true,
+  "svgAttrs": {
+    "width": "15",
+    "height": "15"
+  },
+  "r2": 0,
+  "componentRoot": true,
+  "shapeRef": "6aec5ff1-370a-11ed-8742-15e8db9d5ab2",
+  "showContent": true,
+  "proportionLock": false,
+  "pageId": "34e9c361-3706-11ed-a332-c67f7655c7b3",
+  "r3": 0,
+  "constraintsV": "top",
+  "constraintsH": "left",
+  "r1": 0,
+  "componentId": "6aec5ff1-370a-11ed-8742-15e8db9d5ab2",
+  "proportion": 1,
+  "r4": 0,
+  "fills": [],
+  "ry": 0,
+  "componentFile": "40e06342-8830-80d6-8008-9251c5d8cc8c",
+  "shapes": [
+    "9aab6a50-3706-11ed-9ad6-7fdcffef94d5",
+    "9aac54b0-3706-11ed-9ad6-7fdcffef94d5",
+    "9aacc9e0-3706-11ed-9ad6-7fdcffef94d5",
+    "9aad1800-3706-11ed-9ad6-7fdcffef94d5",
+    "9aad8d30-3706-11ed-9ad6-7fdcffef94d5",
+    "9aaddb50-3706-11ed-9ad6-7fdcffef94d5",
+    "9aae5080-3706-11ed-9ad6-7fdcffef94d5",
+    "9aae9ea0-3706-11ed-9ad6-7fdcffef94d5",
+    "9aaf8900-3706-11ed-9ad6-7fdcffef94d5",
+    "9aaffe30-3706-11ed-9ad6-7fdcffef94d5",
+    "9ab07360-3706-11ed-9ad6-7fdcffef94d5"
+  ]
+}

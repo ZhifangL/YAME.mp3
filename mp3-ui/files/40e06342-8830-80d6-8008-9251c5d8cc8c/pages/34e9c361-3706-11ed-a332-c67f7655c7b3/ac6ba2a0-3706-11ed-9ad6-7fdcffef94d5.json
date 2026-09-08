@@ -1,0 +1,95 @@
+{
+  "id": "ac6ba2a0-3706-11ed-9ad6-7fdcffef94d5",
+  "name": "shadow",
+  "type": "frame",
+  "x": 222.00000008280185,
+  "y": 418.00000101343613,
+  "width": 15.000000036226595,
+  "height": 15.00000007616677,
+  "rotation": 0,
+  "selrect": {
+    "x": 222.00000008280185,
+    "y": 418.00000101343613,
+    "width": 15.000000036226595,
+    "height": 15.00000007616677,
+    "x1": 222.00000008280185,
+    "y1": 418.00000101343613,
+    "x2": 237.00000011902844,
+    "y2": 433.0000010896029
+  },
+  "points": [
+    {
+      "x": 222.00000008280185,
+      "y": 418.00000101343613
+    },
+    {
+      "x": 237.00000008280168,
+      "y": 418.00000108960296
+    },
+    {
+      "x": 237.00000011902844,
+      "y": 433.0000010896029
+    },
+    {
+      "x": 222.0000001190286,
+      "y": 433.0000010134361
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 8.728898132248298E-9,
+    "c": -8.728898132248298E-9,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 0.9999999999999993,
+    "b": -8.728898132248285E-9,
+    "c": 8.728898132248285E-9,
+    "d": 0.9999999999999993,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "frameId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "flipX": null,
+  "flipY": null,
+  "rx": 0,
+  "index": null,
+  "hideInViewer": true,
+  "svgAttrs": {
+    "width": "15",
+    "height": "15"
+  },
+  "r2": 0,
+  "componentRoot": true,
+  "shapeRef": "75df4a60-3707-11ed-9ad6-7fdcffef94d5",
+  "showContent": true,
+  "proportionLock": false,
+  "pageId": "34e9c361-3706-11ed-a332-c67f7655c7b3",
+  "r3": 0,
+  "constraintsV": "top",
+  "constraintsH": "left",
+  "r1": 0,
+  "componentId": "75df4a60-3707-11ed-9ad6-7fdcffef94d5",
+  "proportion": 1,
+  "r4": 0,
+  "fills": [],
+  "ry": 0,
+  "componentFile": "40e06342-8830-80d6-8008-9251c5d8cc8c",
+  "shapes": [
+    "ac6d2940-3706-11ed-9ad6-7fdcffef94d5",
+    "ac6f2510-3706-11ed-9ad6-7fdcffef94d5",
+    "ac7147f0-3706-11ed-9ad6-7fdcffef94d5",
+    "ac7343c0-3706-11ed-9ad6-7fdcffef94d5",
+    "ac758db0-3706-11ed-9ad6-7fdcffef94d5",
+    "ac77b090-3706-11ed-9ad6-7fdcffef94d5",
+    "ac79ac60-3706-11ed-9ad6-7fdcffef94d5",
+    "ac7bf650-3706-11ed-9ad6-7fdcffef94d5",
+    "ac7e1930-3706-11ed-9ad6-7fdcffef94d5",
+    "ac801500-3706-11ed-9ad6-7fdcffef94d5",
+    "ac8237e0-3706-11ed-9ad6-7fdcffef94d5",
+    "ac8433b0-3706-11ed-9ad6-7fdcffef94d5"
+  ]
+}

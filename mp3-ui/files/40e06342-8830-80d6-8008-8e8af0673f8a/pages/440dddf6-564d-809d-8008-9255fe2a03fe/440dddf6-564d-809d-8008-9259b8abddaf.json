@@ -1,0 +1,147 @@
+{
+  "id": "440dddf6-564d-809d-8008-9259b8abddaf",
+  "name": "Field \/ Label Comment",
+  "type": "text",
+  "x": 532,
+  "y": 428,
+  "width": 52,
+  "height": 14,
+  "rotation": 0,
+  "selrect": {
+    "x": 532,
+    "y": 428,
+    "width": 52,
+    "height": 14,
+    "x1": 532,
+    "y1": 428,
+    "x2": 584,
+    "y2": 442
+  },
+  "points": [
+    {
+      "x": 532,
+      "y": 428
+    },
+    {
+      "x": 584,
+      "y": 428
+    },
+    {
+      "x": 584,
+      "y": 442
+    },
+    {
+      "x": 532,
+      "y": 442
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "440dddf6-564d-809d-8008-925a3596a1f6",
+  "frameId": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "flipX": null,
+  "flipY": null,
+  "growType": "auto-width",
+  "content": {
+    "type": "root",
+    "children": [
+      {
+        "type": "paragraph-set",
+        "children": [
+          {
+            "lineHeight": "1.2",
+            "fontStyle": "normal",
+            "children": [
+              {
+                "lineHeight": "1.2",
+                "fontStyle": "normal",
+                "typographyRefId": null,
+                "textTransform": "none",
+                "textAlign": "left",
+                "fontId": "gfont-inter",
+                "fontSize": "11",
+                "fontWeight": "500",
+                "typographyRefFile": null,
+                "textDirection": "ltr",
+                "fontVariantId": "500",
+                "textDecoration": "none",
+                "letterSpacing": "0",
+                "fills": [
+                  {
+                    "fillColor": "#8e8e93",
+                    "fillOpacity": 1
+                  }
+                ],
+                "fontFamily": "Inter",
+                "text": "Comment"
+              }
+            ],
+            "typographyRefId": null,
+            "textTransform": "none",
+            "textAlign": "left",
+            "fontId": "gfont-inter",
+            "fontSize": "11",
+            "fontWeight": "500",
+            "typographyRefFile": null,
+            "textDirection": "ltr",
+            "type": "paragraph",
+            "fontVariantId": "500",
+            "textDecoration": "none",
+            "letterSpacing": "0",
+            "fills": [
+              {
+                "fillColor": "#8e8e93",
+                "fillOpacity": 1
+              }
+            ],
+            "fontFamily": "Inter"
+          }
+        ]
+      }
+    ]
+  },
+  "constraintsV": "scale",
+  "constraintsH": "scale",
+  "positionData": [
+    {
+      "x": 532,
+      "y": 441.6000061035156,
+      "width": 51.08332824707031,
+      "height": 14,
+      "x1": 0,
+      "y1": -0.399993896484375,
+      "x2": 51.08332824707031,
+      "y2": 13.600006103515625,
+      "fontStyle": "normal",
+      "textTransform": "none",
+      "fontSize": "11px",
+      "fontWeight": "500",
+      "textDecoration": "none",
+      "letterSpacing": "normal",
+      "fills": [
+        {
+          "fillColor": "#8e8e93",
+          "fillOpacity": 1
+        }
+      ],
+      "direction": "ltr",
+      "fontFamily": "\"Inter\"",
+      "text": "Comment"
+    }
+  ],
+  "pageId": "440dddf6-564d-809d-8008-9255fe2a03fe"
+}

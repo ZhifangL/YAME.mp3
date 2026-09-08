@@ -1,0 +1,89 @@
+{
+  "id": "440dddf6-564d-809d-8008-9259ce507ba4",
+  "name": "Footer \/ Save",
+  "type": "rect",
+  "x": 733,
+  "y": 776,
+  "width": 78,
+  "height": 32,
+  "rotation": 0,
+  "selrect": {
+    "x": 733,
+    "y": 776,
+    "width": 78,
+    "height": 32,
+    "x1": 733,
+    "y1": 776,
+    "x2": 811,
+    "y2": 808
+  },
+  "points": [
+    {
+      "x": 733,
+      "y": 776
+    },
+    {
+      "x": 811,
+      "y": 776
+    },
+    {
+      "x": 811,
+      "y": 808
+    },
+    {
+      "x": 733,
+      "y": 808
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "440dddf6-564d-809d-8008-925a36397861",
+  "frameId": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "flipX": null,
+  "flipY": null,
+  "r2": 8,
+  "proportionLock": false,
+  "pageId": "440dddf6-564d-809d-8008-9255fe2a03fe",
+  "r3": 8,
+  "constraintsV": "scale",
+  "constraintsH": "scale",
+  "r1": 8,
+  "strokes": [],
+  "proportion": 1,
+  "shadow": [
+    {
+      "id": "440dddf6-564d-809d-8008-9259ce591215",
+      "style": "drop-shadow",
+      "color": {
+        "color": "#000000",
+        "opacity": 0.2
+      },
+      "offsetX": 0,
+      "offsetY": 2,
+      "blur": 8,
+      "spread": 0,
+      "hidden": false
+    }
+  ],
+  "r4": 8,
+  "fills": [
+    {
+      "fillColor": "#6d28d9",
+      "fillOpacity": 1
+    }
+  ]
+}

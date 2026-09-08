@@ -1,0 +1,35 @@
+# Mp3MetaApi - endpoint smoke tests (REST Client for JetBrains / VS Code)
+# Start the API first:
+#   cd Mp3MetaApi && .venv/bin/uvicorn main:app --reload --port 8000
+
+GET http://127.0.0.1:8000/
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/api/health
+Accept: application/json
+
+###
+
+# Browse the sample folder (URL-encode the path)
+GET http://127.0.0.1:8000/api/browse?path=%2FUsers%2Flzf%2FDocuments%2Fdsh_Playground%2FSampleMP3
+Accept: application/json
+
+###
+
+# Read metadata of one sample file
+GET http://127.0.0.1:8000/api/metadata?path=%2FUsers%2Flzf%2FDocuments%2Fdsh_Playground%2FSampleMP3%2FLonely%20Heart%20(128kbit_AAC).mp3
+Accept: application/json
+
+###
+
+# Missing file -> expect 404
+GET http://127.0.0.1:8000/api/metadata?path=%2Ftmp%2Fdoes_not_exist.mp3
+Accept: application/json
+
+###
+
+# Non-MP3 file -> expect 422
+GET http://127.0.0.1:8000/api/metadata?path=%2Fetc%2Fhosts
+Accept: application/json

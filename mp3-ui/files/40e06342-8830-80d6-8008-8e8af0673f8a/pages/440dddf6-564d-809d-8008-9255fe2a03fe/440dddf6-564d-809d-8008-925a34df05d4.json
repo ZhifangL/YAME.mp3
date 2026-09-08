@@ -1,0 +1,72 @@
+{
+  "id": "440dddf6-564d-809d-8008-925a34df05d4",
+  "name": "Title Bar",
+  "type": "group",
+  "x": 256,
+  "y": 189,
+  "width": 558,
+  "height": 26,
+  "rotation": 0,
+  "selrect": {
+    "x": 256,
+    "y": 189,
+    "width": 558,
+    "height": 26,
+    "x1": 256,
+    "y1": 189,
+    "x2": 814,
+    "y2": 215
+  },
+  "points": [
+    {
+      "x": 256,
+      "y": 189
+    },
+    {
+      "x": 814,
+      "y": 189
+    },
+    {
+      "x": 814,
+      "y": 215
+    },
+    {
+      "x": 256,
+      "y": 215
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "frameId": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "flipX": false,
+  "flipY": false,
+  "index": 6,
+  "proportionLock": false,
+  "strokes": [],
+  "proportion": 1,
+  "fills": [],
+  "shapes": [
+    "440dddf6-564d-809d-8008-9259b4db3c11",
+    "440dddf6-564d-809d-8008-9259b4ec14e7",
+    "440dddf6-564d-809d-8008-9259b4fbd047",
+    "440dddf6-564d-809d-8008-9259b50dd17b",
+    "440dddf6-564d-809d-8008-9259b537b330",
+    "440dddf6-564d-809d-8008-9259b558fdb1"
+  ],
+  "pageId": "440dddf6-564d-809d-8008-9255fe2a03fe"
+}

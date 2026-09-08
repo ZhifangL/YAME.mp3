@@ -1,0 +1,68 @@
+{
+  "id": "aa8f4950-a696-808b-8008-923e5ec5d5d9",
+  "name": "Header \/ Search",
+  "type": "group",
+  "x": 1280,
+  "y": 16,
+  "width": 260,
+  "height": 24,
+  "rotation": 0,
+  "selrect": {
+    "x": 1280,
+    "y": 16,
+    "width": 260,
+    "height": 24,
+    "x1": 1280,
+    "y1": 16,
+    "x2": 1540,
+    "y2": 40
+  },
+  "points": [
+    {
+      "x": 1280,
+      "y": 16
+    },
+    {
+      "x": 1540,
+      "y": 16
+    },
+    {
+      "x": 1540,
+      "y": 40
+    },
+    {
+      "x": 1280,
+      "y": 40
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "aa8f4950-a696-808b-8008-923e5eccea49",
+  "frameId": "02184619-eebc-80a0-8008-903acd9a02d8",
+  "flipX": false,
+  "flipY": false,
+  "index": 6,
+  "proportionLock": false,
+  "strokes": [],
+  "proportion": 1,
+  "fills": [],
+  "shapes": [
+    "02184619-eebc-80a0-8008-903ad8cacdad",
+    "02184619-eebc-80a0-8008-903ad8f96d68"
+  ],
+  "pageId": "40e06342-8830-80d6-8008-8e8af0673f8b"
+}

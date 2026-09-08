@@ -1,0 +1,103 @@
+{
+  "id": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "name": "Edit Window \u2014 Track",
+  "type": "frame",
+  "x": 239.9999999999999,
+  "y": 180,
+  "width": 600,
+  "height": 640,
+  "rotation": 0,
+  "selrect": {
+    "x": 239.9999999999999,
+    "y": 180,
+    "width": 600,
+    "height": 640,
+    "x1": 239.9999999999999,
+    "y1": 180,
+    "x2": 839.9999999999999,
+    "y2": 820
+  },
+  "points": [
+    {
+      "x": 239.99999999999994,
+      "y": 180
+    },
+    {
+      "x": 839.9999999999999,
+      "y": 180
+    },
+    {
+      "x": 839.9999999999999,
+      "y": 820
+    },
+    {
+      "x": 239.99999999999994,
+      "y": 820
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "00000000-0000-0000-0000-000000000000",
+  "frameId": "00000000-0000-0000-0000-000000000000",
+  "flipX": null,
+  "flipY": null,
+  "hideFillOnExport": false,
+  "r2": 14,
+  "showContent": false,
+  "proportionLock": false,
+  "pageId": "440dddf6-564d-809d-8008-9255fe2a03fe",
+  "r3": 14,
+  "r1": 14,
+  "strokes": [
+    {
+      "strokeColor": "#e5e5ea",
+      "strokeOpacity": 1,
+      "strokeWidth": 1
+    }
+  ],
+  "proportion": 1,
+  "shadow": [
+    {
+      "id": "440dddf6-564d-809d-8008-9259b4d3ef6c",
+      "style": "drop-shadow",
+      "color": {
+        "color": "#000000",
+        "opacity": 0.2
+      },
+      "offsetX": 0,
+      "offsetY": 20,
+      "blur": 60,
+      "spread": 0,
+      "hidden": false
+    }
+  ],
+  "r4": 14,
+  "fills": [
+    {
+      "fillColor": "#ffffff",
+      "fillOpacity": 1
+    }
+  ],
+  "shapes": [
+    "440dddf6-564d-809d-8008-925a34df05d4",
+    "440dddf6-564d-809d-8008-9259b5780a1e",
+    "440dddf6-564d-809d-8008-925a35052596",
+    "440dddf6-564d-809d-8008-925a35cc011d",
+    "440dddf6-564d-809d-8008-925a36397861",
+    "44b26f72-ee77-8040-8008-925fc1bb556a"
+  ]
+}

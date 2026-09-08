@@ -1,0 +1,89 @@
+{
+  "id": "ad5c1d20-3706-11ed-9ad6-7fdcffef94d5",
+  "name": "share-1",
+  "type": "frame",
+  "x": 221.9999987664105,
+  "y": 218.00000101343628,
+  "width": 15.000000036226709,
+  "height": 15.000000076166941,
+  "rotation": 0,
+  "selrect": {
+    "x": 221.9999987664105,
+    "y": 218.00000101343628,
+    "width": 15.000000036226709,
+    "height": 15.000000076166941,
+    "x1": 221.9999987664105,
+    "y1": 218.00000101343628,
+    "x2": 236.9999988026372,
+    "y2": 233.00000108960322
+  },
+  "points": [
+    {
+      "x": 221.9999987664105,
+      "y": 218.00000101343628
+    },
+    {
+      "x": 236.99999876641047,
+      "y": 218.0000010896031
+    },
+    {
+      "x": 236.9999988026372,
+      "y": 233.00000108960322
+    },
+    {
+      "x": 221.99999880263724,
+      "y": 233.0000010134364
+    }
+  ],
+  "transform": {
+    "a": 1.0000000000000002,
+    "b": -6.172263061599361E-9,
+    "c": 6.172263061599361E-9,
+    "d": 1.0000000000000002,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 0.9999999999999993,
+    "b": 6.172263061599361E-9,
+    "c": -6.172263061599361E-9,
+    "d": 0.9999999999999993,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "frameId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "flipX": null,
+  "flipY": null,
+  "rx": 0,
+  "index": null,
+  "hideInViewer": true,
+  "svgAttrs": {
+    "width": "15",
+    "height": "15"
+  },
+  "touched": [
+    "modifiable-group"
+  ],
+  "r2": 0,
+  "componentRoot": true,
+  "shapeRef": "6ed73611-3707-11ed-9ad6-7fdcffef94d5",
+  "showContent": true,
+  "proportionLock": false,
+  "pageId": "34e9c361-3706-11ed-a332-c67f7655c7b3",
+  "r3": 0,
+  "constraintsV": "top",
+  "constraintsH": "left",
+  "r1": 0,
+  "componentId": "6ed73611-3707-11ed-9ad6-7fdcffef94d5",
+  "blocked": true,
+  "proportion": 1,
+  "r4": 0,
+  "fills": [],
+  "ry": 0,
+  "componentFile": "40e06342-8830-80d6-8008-9251c5d8cc8c",
+  "shapes": [
+    "ad5d7cb0-3706-11ed-9ad6-7fdcffef94d5",
+    "ad60ff20-3706-11ed-9ad6-7fdcffef94d5"
+  ]
+}

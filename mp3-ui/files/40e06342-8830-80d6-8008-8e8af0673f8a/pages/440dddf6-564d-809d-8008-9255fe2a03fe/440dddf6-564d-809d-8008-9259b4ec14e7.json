@@ -1,0 +1,70 @@
+{
+  "id": "440dddf6-564d-809d-8008-9259b4ec14e7",
+  "name": "Traffic Light \/ yellow",
+  "type": "circle",
+  "x": 273.4375,
+  "y": 197,
+  "width": 12.455357142857167,
+  "height": 10,
+  "rotation": 0,
+  "selrect": {
+    "x": 273.4375,
+    "y": 197,
+    "width": 12.455357142857167,
+    "height": 10,
+    "x1": 273.4375,
+    "y1": 197,
+    "x2": 285.89285714285717,
+    "y2": 207
+  },
+  "points": [
+    {
+      "x": 273.4375,
+      "y": 197
+    },
+    {
+      "x": 285.89285714285717,
+      "y": 197
+    },
+    {
+      "x": 285.89285714285717,
+      "y": 207
+    },
+    {
+      "x": 273.4375,
+      "y": 207
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "440dddf6-564d-809d-8008-925a34df05d4",
+  "frameId": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "flipX": null,
+  "flipY": null,
+  "proportionLock": false,
+  "constraintsV": "scale",
+  "constraintsH": "scale",
+  "strokes": [],
+  "proportion": 1,
+  "fills": [
+    {
+      "fillColor": "#febc2e",
+      "fillOpacity": 1
+    }
+  ],
+  "pageId": "440dddf6-564d-809d-8008-9255fe2a03fe"
+}

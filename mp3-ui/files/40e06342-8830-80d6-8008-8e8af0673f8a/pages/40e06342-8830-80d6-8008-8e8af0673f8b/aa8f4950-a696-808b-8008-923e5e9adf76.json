@@ -1,0 +1,68 @@
+{
+  "id": "aa8f4950-a696-808b-8008-923e5e9adf76",
+  "name": "Sidebar \/ Save Preset",
+  "type": "group",
+  "x": 17,
+  "y": 689,
+  "width": 338,
+  "height": 38,
+  "rotation": 0,
+  "selrect": {
+    "x": 17,
+    "y": 689,
+    "width": 338,
+    "height": 38,
+    "x1": 17,
+    "y1": 689,
+    "x2": 355,
+    "y2": 727
+  },
+  "points": [
+    {
+      "x": 17,
+      "y": 689
+    },
+    {
+      "x": 355,
+      "y": 689
+    },
+    {
+      "x": 355,
+      "y": 727
+    },
+    {
+      "x": 17,
+      "y": 727
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "aa8f4950-a696-808b-8008-923e5ea75121",
+  "frameId": "02184619-eebc-80a0-8008-903acd9a02d8",
+  "flipX": false,
+  "flipY": false,
+  "index": 38,
+  "proportionLock": false,
+  "strokes": [],
+  "proportion": 1,
+  "fills": [],
+  "shapes": [
+    "02184619-eebc-80a0-8008-903b00a76c98",
+    "02184619-eebc-80a0-8008-903b00bb1047"
+  ],
+  "pageId": "40e06342-8830-80d6-8008-8e8af0673f8b"
+}

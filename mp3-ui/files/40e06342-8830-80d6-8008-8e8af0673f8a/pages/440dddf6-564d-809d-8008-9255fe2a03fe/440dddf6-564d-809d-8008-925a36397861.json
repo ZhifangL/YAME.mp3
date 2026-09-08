@@ -1,0 +1,70 @@
+{
+  "id": "440dddf6-564d-809d-8008-925a36397861",
+  "name": "Footer",
+  "type": "group",
+  "x": 647,
+  "y": 776,
+  "width": 164,
+  "height": 32,
+  "rotation": 0,
+  "selrect": {
+    "x": 647,
+    "y": 776,
+    "width": 164,
+    "height": 32,
+    "x1": 647,
+    "y1": 776,
+    "x2": 811,
+    "y2": 808
+  },
+  "points": [
+    {
+      "x": 647,
+      "y": 776
+    },
+    {
+      "x": 811,
+      "y": 776
+    },
+    {
+      "x": 811,
+      "y": 808
+    },
+    {
+      "x": 647,
+      "y": 808
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "frameId": "440dddf6-564d-809d-8008-9259b4ba7024",
+  "flipX": false,
+  "flipY": false,
+  "index": 13,
+  "proportionLock": false,
+  "strokes": [],
+  "proportion": 1,
+  "fills": [],
+  "shapes": [
+    "440dddf6-564d-809d-8008-9259ce25d8ab",
+    "440dddf6-564d-809d-8008-9259ce3bd773",
+    "440dddf6-564d-809d-8008-9259ce507ba4",
+    "440dddf6-564d-809d-8008-9259ce610978"
+  ],
+  "pageId": "440dddf6-564d-809d-8008-9255fe2a03fe"
+}

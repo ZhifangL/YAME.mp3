@@ -1,0 +1,90 @@
+{
+  "id": "a23d6f20-3706-11ed-9ad6-7fdcffef94d5",
+  "name": "iconjar-logo",
+  "type": "frame",
+  "x": 322.0000023695202,
+  "y": 1618.0000064359292,
+  "width": 15.00000016716018,
+  "height": 15.000000054765906,
+  "rotation": 0,
+  "selrect": {
+    "x": 322.0000023695202,
+    "y": 1618.0000064359292,
+    "width": 15.00000016716018,
+    "height": 15.000000054765906,
+    "x1": 322.0000023695202,
+    "y1": 1618.0000064359292,
+    "x2": 337.00000253668037,
+    "y2": 1633.0000064906951
+  },
+  "points": [
+    {
+      "x": 321.9999957137353,
+      "y": 1618.0000026606808
+    },
+    {
+      "x": 336.9999958808955,
+      "y": 1618.0000027916144
+    },
+    {
+      "x": 336.999995749962,
+      "y": 1633.0000028463803
+    },
+    {
+      "x": 321.99999558280183,
+      "y": 1633.0000027154467
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 8.728898132248298E-9,
+    "c": -8.728898132248298E-9,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 0.9999999999999996,
+    "b": -8.728898132248289E-9,
+    "c": 8.728898132248289E-9,
+    "d": 0.9999999999999996,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "frameId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "flipX": null,
+  "flipY": null,
+  "rx": 0,
+  "index": null,
+  "hideInViewer": true,
+  "svgAttrs": {
+    "width": "15",
+    "height": "15"
+  },
+  "touched": [
+    "shapes-group",
+    "modifiable-group"
+  ],
+  "r2": 0,
+  "componentRoot": true,
+  "shapeRef": "208a20b1-3709-11ed-8742-15e8db9d5ab2",
+  "showContent": true,
+  "proportionLock": false,
+  "pageId": "34e9c361-3706-11ed-a332-c67f7655c7b3",
+  "r3": 0,
+  "constraintsV": "top",
+  "constraintsH": "left",
+  "r1": 0,
+  "componentId": "208a20b1-3709-11ed-8742-15e8db9d5ab2",
+  "blocked": false,
+  "proportion": 1,
+  "r4": 0,
+  "fills": [],
+  "ry": 0,
+  "componentFile": "40e06342-8830-80d6-8008-9251c5d8cc8c",
+  "shapes": [
+    "a23e5980-3706-11ed-9ad6-7fdcffef94d5",
+    "a24166c0-3706-11ed-9ad6-7fdcffef94d5"
+  ]
+}

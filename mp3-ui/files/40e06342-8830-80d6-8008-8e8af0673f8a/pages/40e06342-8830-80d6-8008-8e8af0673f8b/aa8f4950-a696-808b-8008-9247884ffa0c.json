@@ -1,0 +1,147 @@
+{
+  "id": "aa8f4950-a696-808b-8008-9247884ffa0c",
+  "name": "Text",
+  "type": "text",
+  "x": 1293.6052631578946,
+  "y": 590,
+  "width": 24,
+  "height": 15,
+  "rotation": 0,
+  "selrect": {
+    "x": 1293.6052631578946,
+    "y": 590,
+    "width": 24,
+    "height": 15,
+    "x1": 1293.6052631578946,
+    "y1": 590,
+    "x2": 1317.6052631578946,
+    "y2": 605
+  },
+  "points": [
+    {
+      "x": 1293.6052631578946,
+      "y": 590
+    },
+    {
+      "x": 1317.6052631578946,
+      "y": 590
+    },
+    {
+      "x": 1317.6052631578946,
+      "y": 605
+    },
+    {
+      "x": 1293.6052631578946,
+      "y": 605
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "aa8f4950-a696-808b-8008-9247884ffa09",
+  "frameId": "aa8f4950-a696-808b-8008-923f19b8459d",
+  "flipX": null,
+  "flipY": null,
+  "lastResizeDirection": "horizontal",
+  "growType": "auto-width",
+  "content": {
+    "type": "root",
+    "children": [
+      {
+        "type": "paragraph-set",
+        "children": [
+          {
+            "lineHeight": "1.2",
+            "fontStyle": "normal",
+            "children": [
+              {
+                "lineHeight": "1.2",
+                "fontStyle": "normal",
+                "textTransform": "none",
+                "textAlign": "left",
+                "fontId": "gfont-inter",
+                "fontSize": "12",
+                "fontWeight": "500",
+                "textDirection": "ltr",
+                "fontVariantId": "500",
+                "textDecoration": "none",
+                "letterSpacing": "0",
+                "fills": [
+                  {
+                    "fillColor": "#1c1c1e",
+                    "fillOpacity": 1
+                  }
+                ],
+                "fontFamily": "Inter",
+                "text": "Odo"
+              }
+            ],
+            "textTransform": "none",
+            "textAlign": "left",
+            "fontId": "gfont-inter",
+            "key": "399rd",
+            "fontSize": "12",
+            "fontWeight": "500",
+            "textDirection": "ltr",
+            "type": "paragraph",
+            "fontVariantId": "500",
+            "textDecoration": "none",
+            "letterSpacing": "0",
+            "fills": [
+              {
+                "fillColor": "#1c1c1e",
+                "fillOpacity": 1
+              }
+            ],
+            "fontFamily": "Inter"
+          }
+        ]
+      }
+    ]
+  },
+  "pageId": "40e06342-8830-80d6-8008-8e8af0673f8b",
+  "constraintsV": "scale",
+  "constraintsH": "scale",
+  "positionData": [
+    {
+      "x": 1293.6052631578946,
+      "y": 604.6999969482422,
+      "width": 23.866668701171875,
+      "height": 15,
+      "x1": 0,
+      "y1": -0.3000030517578125,
+      "x2": 23.866668701171875,
+      "y2": 14.699996948242188,
+      "fontStyle": "normal",
+      "textTransform": "none",
+      "fontSize": "12px",
+      "fontWeight": "500",
+      "textDecoration": "none",
+      "letterSpacing": "normal",
+      "fills": [
+        {
+          "fillColor": "#1c1c1e",
+          "fillOpacity": 1
+        }
+      ],
+      "direction": "ltr",
+      "fontFamily": "\"Inter\"",
+      "text": "Odo"
+    }
+  ],
+  "strokes": [],
+  "fills": []
+}

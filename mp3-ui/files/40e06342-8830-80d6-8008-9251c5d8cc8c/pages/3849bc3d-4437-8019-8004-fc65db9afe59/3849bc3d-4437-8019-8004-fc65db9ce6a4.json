@@ -1,0 +1,121 @@
+{
+  "id": "3849bc3d-4437-8019-8004-fc65db9ce6a4",
+  "name": "Components 2",
+  "type": "frame",
+  "x": 0,
+  "y": 904.0,
+  "width": 570.0,
+  "height": 570.0,
+  "rotation": 0,
+  "selrect": {
+    "x": 0,
+    "y": 904.0,
+    "width": 570.0,
+    "height": 570.0,
+    "x1": 0,
+    "y1": 904.0,
+    "x2": 570.0,
+    "y2": 1474.0
+  },
+  "points": [
+    {
+      "x": 0.0,
+      "y": 904.0
+    },
+    {
+      "x": 570.0,
+      "y": 904.0
+    },
+    {
+      "x": 570.0,
+      "y": 1474.0
+    },
+    {
+      "x": 0.0,
+      "y": 1474.0
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "00000000-0000-0000-0000-000000000000",
+  "frameId": "00000000-0000-0000-0000-000000000000",
+  "flipX": null,
+  "flipY": null,
+  "hideFillOnExport": false,
+  "proportionLock": false,
+  "strokes": [],
+  "proportion": 1.0,
+  "fills": [
+    {
+      "fillColor": "#FFFFFF",
+      "fillOpacity": 1
+    }
+  ],
+  "shapes": [
+    "a6654a11-370a-11ed-8742-15e8db9d5ab2",
+    "7dfd5b31-370a-11ed-8742-15e8db9d5ab2",
+    "6aec5ff1-370a-11ed-8742-15e8db9d5ab2",
+    "69d91b31-370a-11ed-8742-15e8db9d5ab2",
+    "660ef3d1-370a-11ed-8742-15e8db9d5ab2",
+    "57774bb1-370a-11ed-8742-15e8db9d5ab2",
+    "53cc9331-370a-11ed-8742-15e8db9d5ab2",
+    "5025d251-370a-11ed-8742-15e8db9d5ab2",
+    "4259b791-370a-11ed-8742-15e8db9d5ab2",
+    "3c240e71-370a-11ed-8742-15e8db9d5ab2",
+    "3af02251-370a-11ed-8742-15e8db9d5ab2",
+    "2aa01bd1-370a-11ed-8742-15e8db9d5ab2",
+    "1262aa11-370a-11ed-8742-15e8db9d5ab2",
+    "0f06fbf1-370a-11ed-8742-15e8db9d5ab2",
+    "ffb097b1-3709-11ed-8742-15e8db9d5ab2",
+    "f9b05671-3709-11ed-8742-15e8db9d5ab2",
+    "d7049af1-3709-11ed-8742-15e8db9d5ab2",
+    "cd7343b1-3709-11ed-8742-15e8db9d5ab2",
+    "c7364791-3709-11ed-8742-15e8db9d5ab2",
+    "c189f2b1-3709-11ed-8742-15e8db9d5ab2",
+    "bc6a9b91-3709-11ed-8742-15e8db9d5ab2",
+    "ae7993b1-3709-11ed-8742-15e8db9d5ab2",
+    "933a7ab1-3709-11ed-8742-15e8db9d5ab2",
+    "89cefaf1-3709-11ed-8742-15e8db9d5ab2",
+    "878d9671-3709-11ed-8742-15e8db9d5ab2",
+    "852aee51-3709-11ed-8742-15e8db9d5ab2",
+    "82a04bd1-3709-11ed-8742-15e8db9d5ab2",
+    "80a3df91-3709-11ed-8742-15e8db9d5ab2",
+    "0e7f4ad1-3709-11ed-8742-15e8db9d5ab2",
+    "001876b1-3709-11ed-8742-15e8db9d5ab2",
+    "2d5589c1-3708-11ed-9ad6-7fdcffef94d5",
+    "29bd20c1-3708-11ed-9ad6-7fdcffef94d5",
+    "27dbdda1-3708-11ed-9ad6-7fdcffef94d5",
+    "23356001-3708-11ed-9ad6-7fdcffef94d5",
+    "1632fde1-3708-11ed-9ad6-7fdcffef94d5",
+    "0e0c8141-3708-11ed-9ad6-7fdcffef94d5",
+    "eefd7481-3707-11ed-9ad6-7fdcffef94d5",
+    "eadd3de1-3707-11ed-9ad6-7fdcffef94d5",
+    "8f188141-3707-11ed-9ad6-7fdcffef94d5",
+    "8d700161-3707-11ed-9ad6-7fdcffef94d5",
+    "abab11c1-3706-11ed-9ad6-7fdcffef94d5",
+    "3925f101-3707-11ed-9ad6-7fdcffef94d5",
+    "33db4421-3707-11ed-9ad6-7fdcffef94d5",
+    "20d80481-3707-11ed-9ad6-7fdcffef94d5",
+    "1635d981-3707-11ed-9ad6-7fdcffef94d5",
+    "1369e841-3707-11ed-9ad6-7fdcffef94d5",
+    "075e6941-3707-11ed-9ad6-7fdcffef94d5",
+    "f5ffb1e1-3706-11ed-9ad6-7fdcffef94d5",
+    "ed93a0c1-3706-11ed-9ad6-7fdcffef94d5",
+    "cad71c61-3706-11ed-9ad6-7fdcffef94d5"
+  ],
+  "pageId": "3849bc3d-4437-8019-8004-fc65db9afe59"
+}

@@ -1,0 +1,76 @@
+{
+  "id": "44b26f72-ee77-8040-8008-925fc3bd35e5",
+  "name": "Advanced Field \/ Genre",
+  "type": "frame",
+  "x": 261.99999999999994,
+  "y": 677,
+  "width": 258.00000000000006,
+  "height": 40,
+  "rotation": 0,
+  "selrect": {
+    "x": 261.99999999999994,
+    "y": 677,
+    "width": 258.00000000000006,
+    "height": 40,
+    "x1": 261.99999999999994,
+    "y1": 677,
+    "x2": 520,
+    "y2": 717
+  },
+  "points": [
+    {
+      "x": 261.99999999999994,
+      "y": 677
+    },
+    {
+      "x": 520,
+      "y": 677
+    },
+    {
+      "x": 520,
+      "y": 717
+    },
+    {
+      "x": 261.99999999999994,
+      "y": 717
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "44b26f72-ee77-8040-8008-925fc232e074",
+  "frameId": "44b26f72-ee77-8040-8008-925fc232e074",
+  "flipX": null,
+  "flipY": null,
+  "hideFillOnExport": false,
+  "hideInViewer": true,
+  "r2": 0,
+  "proportionLock": false,
+  "pageId": "440dddf6-564d-809d-8008-9255fe2a03fe",
+  "r3": 0,
+  "constraintsV": "top",
+  "constraintsH": "left",
+  "r1": 0,
+  "strokes": [],
+  "proportion": 1,
+  "r4": 0,
+  "fills": [],
+  "shapes": [
+    "44b26f72-ee77-8040-8008-925fc3d52757",
+    "44b26f72-ee77-8040-8008-925fc3ef371c",
+    "44b26f72-ee77-8040-8008-925fc40b9173"
+  ]
+}

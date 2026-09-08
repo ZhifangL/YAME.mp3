@@ -1,0 +1,71 @@
+{
+  "id": "aa8f4950-a696-808b-8008-923e5e7d21fa",
+  "name": "Rule Card \/ REPLACE",
+  "type": "group",
+  "x": 17,
+  "y": 421,
+  "width": 338,
+  "height": 58,
+  "rotation": 0,
+  "selrect": {
+    "x": 17,
+    "y": 421,
+    "width": 338,
+    "height": 58,
+    "x1": 17,
+    "y1": 421,
+    "x2": 355,
+    "y2": 479
+  },
+  "points": [
+    {
+      "x": 17,
+      "y": 421
+    },
+    {
+      "x": 355,
+      "y": 421
+    },
+    {
+      "x": 355,
+      "y": 479
+    },
+    {
+      "x": 17,
+      "y": 479
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "aa8f4950-a696-808b-8008-923e5ea75121",
+  "frameId": "02184619-eebc-80a0-8008-903acd9a02d8",
+  "flipX": false,
+  "flipY": false,
+  "index": 37,
+  "proportionLock": false,
+  "strokes": [],
+  "proportion": 1,
+  "fills": [],
+  "shapes": [
+    "02184619-eebc-80a0-8008-903afa4e19f6",
+    "02184619-eebc-80a0-8008-903afa5ecde5",
+    "02184619-eebc-80a0-8008-903afa6bafac",
+    "02184619-eebc-80a0-8008-903afa79d905",
+    "02184619-eebc-80a0-8008-903afa8b7ed8"
+  ],
+  "pageId": "40e06342-8830-80d6-8008-8e8af0673f8b"
+}

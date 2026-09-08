@@ -1,0 +1,117 @@
+{
+  "id": "9aea9630-3706-11ed-9ad6-7fdcffef94d5",
+  "name": "border-none",
+  "type": "frame",
+  "x": 572.0000010123217,
+  "y": 168.0000034347627,
+  "width": 15.000000036226197,
+  "height": 15.000000076166884,
+  "rotation": 0,
+  "selrect": {
+    "x": 572.0000010123217,
+    "y": 168.0000034347627,
+    "width": 15.000000036226197,
+    "height": 15.000000076166884,
+    "x1": 572.0000010123217,
+    "y1": 168.0000034347627,
+    "x2": 587.0000010485479,
+    "y2": 183.0000035109296
+  },
+  "points": [
+    {
+      "x": 572.0000010123217,
+      "y": 168.0000034347627
+    },
+    {
+      "x": 587.0000010123211,
+      "y": 168.00000351092953
+    },
+    {
+      "x": 587.0000010485479,
+      "y": 183.0000035109296
+    },
+    {
+      "x": 572.0000010485485,
+      "y": 183.00000343476276
+    }
+  ],
+  "transform": {
+    "a": 1.0000000000000002,
+    "b": -6.172263061599361E-9,
+    "c": 6.172263061599361E-9,
+    "d": 1.0000000000000002,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 0.9999999999999998,
+    "b": 6.172263061599361E-9,
+    "c": -6.172263061599361E-9,
+    "d": 0.9999999999999998,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "frameId": "b22dc971-3706-11ed-9ad6-7fdcffef94d5",
+  "flipX": null,
+  "flipY": null,
+  "rx": 0,
+  "index": null,
+  "hideInViewer": true,
+  "svgAttrs": {
+    "width": "15",
+    "height": "15"
+  },
+  "r2": 0,
+  "componentRoot": true,
+  "shapeRef": "64dd51a1-370a-11ed-8742-15e8db9d5ab2",
+  "showContent": true,
+  "proportionLock": false,
+  "pageId": "34e9c361-3706-11ed-a332-c67f7655c7b3",
+  "r3": 0,
+  "constraintsV": "top",
+  "constraintsH": "left",
+  "r1": 0,
+  "componentId": "64dd51a1-370a-11ed-8742-15e8db9d5ab2",
+  "proportion": 1,
+  "r4": 0,
+  "fills": [],
+  "ry": 0,
+  "componentFile": "40e06342-8830-80d6-8008-9251c5d8cc8c",
+  "shapes": [
+    "9aeb0b60-3706-11ed-9ad6-7fdcffef94d5",
+    "9aeb8090-3706-11ed-9ad6-7fdcffef94d5",
+    "9aebf5c0-3706-11ed-9ad6-7fdcffef94d5",
+    "9aec6af0-3706-11ed-9ad6-7fdcffef94d5",
+    "9aece020-3706-11ed-9ad6-7fdcffef94d5",
+    "9aed5550-3706-11ed-9ad6-7fdcffef94d5",
+    "9aedca80-3706-11ed-9ad6-7fdcffef94d5",
+    "9aeeb4e0-3706-11ed-9ad6-7fdcffef94d5",
+    "9aef5120-3706-11ed-9ad6-7fdcffef94d5",
+    "9aef9f40-3706-11ed-9ad6-7fdcffef94d5",
+    "9aefed60-3706-11ed-9ad6-7fdcffef94d5",
+    "9af089a0-3706-11ed-9ad6-7fdcffef94d5",
+    "9af0fed0-3706-11ed-9ad6-7fdcffef94d5",
+    "9af17400-3706-11ed-9ad6-7fdcffef94d5",
+    "9af1e930-3706-11ed-9ad6-7fdcffef94d5",
+    "9af25e60-3706-11ed-9ad6-7fdcffef94d5",
+    "9af2d390-3706-11ed-9ad6-7fdcffef94d5",
+    "9af348c0-3706-11ed-9ad6-7fdcffef94d5",
+    "9af3bdf0-3706-11ed-9ad6-7fdcffef94d5",
+    "9af45a30-3706-11ed-9ad6-7fdcffef94d5",
+    "9af4a850-3706-11ed-9ad6-7fdcffef94d5",
+    "9af54490-3706-11ed-9ad6-7fdcffef94d5",
+    "9af5b9c0-3706-11ed-9ad6-7fdcffef94d5",
+    "9af62ef0-3706-11ed-9ad6-7fdcffef94d5",
+    "9af6a420-3706-11ed-9ad6-7fdcffef94d5",
+    "9af71950-3706-11ed-9ad6-7fdcffef94d5",
+    "9af78e80-3706-11ed-9ad6-7fdcffef94d5",
+    "9af803b0-3706-11ed-9ad6-7fdcffef94d5",
+    "9af878e0-3706-11ed-9ad6-7fdcffef94d5",
+    "9af91520-3706-11ed-9ad6-7fdcffef94d5",
+    "9af98a50-3706-11ed-9ad6-7fdcffef94d5",
+    "9afa2690-3706-11ed-9ad6-7fdcffef94d5",
+    "9afa9bc0-3706-11ed-9ad6-7fdcffef94d5",
+    "9afb10f0-3706-11ed-9ad6-7fdcffef94d5"
+  ]
+}

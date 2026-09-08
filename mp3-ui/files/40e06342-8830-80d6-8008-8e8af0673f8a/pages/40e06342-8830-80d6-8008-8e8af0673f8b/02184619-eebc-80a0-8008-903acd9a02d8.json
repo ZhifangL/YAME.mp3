@@ -1,0 +1,83 @@
+{
+  "id": "02184619-eebc-80a0-8008-903acd9a02d8",
+  "name": "TagForge \u2014 MP3 Metadata Rules Editor",
+  "type": "frame",
+  "x": 0,
+  "y": 0,
+  "width": 1600,
+  "height": 1000,
+  "rotation": 0,
+  "selrect": {
+    "x": 0,
+    "y": 0,
+    "width": 1600,
+    "height": 1000,
+    "x1": 0,
+    "y1": 0,
+    "x2": 1600,
+    "y2": 1000
+  },
+  "points": [
+    {
+      "x": 0,
+      "y": 0
+    },
+    {
+      "x": 1600,
+      "y": 0
+    },
+    {
+      "x": 1600,
+      "y": 1000
+    },
+    {
+      "x": 0,
+      "y": 1000
+    }
+  ],
+  "transform": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "transformInverse": {
+    "a": 1.0,
+    "b": 0.0,
+    "c": 0.0,
+    "d": 1.0,
+    "e": 0.0,
+    "f": 0.0
+  },
+  "parentId": "00000000-0000-0000-0000-000000000000",
+  "frameId": "00000000-0000-0000-0000-000000000000",
+  "flipX": null,
+  "flipY": null,
+  "hideFillOnExport": false,
+  "r2": 0,
+  "proportionLock": false,
+  "pageId": "40e06342-8830-80d6-8008-8e8af0673f8b",
+  "r3": 0,
+  "r1": 0,
+  "strokes": [],
+  "proportion": 1,
+  "r4": 0,
+  "fills": [
+    {
+      "fillColor": "#FFFFFF",
+      "fillOpacity": 1
+    }
+  ],
+  "shapes": [
+    "aa8f4950-a696-808b-8008-923e5eccea49",
+    "aa8f4950-a696-808b-8008-923e5ea75121",
+    "aa8f4950-a696-808b-8008-923e5e371246",
+    "aa8f4950-a696-808b-8008-923e5dcb35af",
+    "e4871010-51db-80cf-8008-925299d7c1c0",
+    "e4871010-51db-80cf-8008-925176d5ea5a",
+    "aa8f4950-a696-808b-8008-923f19b8459d",
+    "d794b69b-d983-8083-8008-92686497bf12"
+  ]
+}
