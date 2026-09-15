@@ -1,5 +1,40 @@
+# ---------------------------------------------------------------- local media
+# Demo/test audio only; not part of the source tree.
 /sample-mp3/
+/sample-different-filetypes/
+
+# ---------------------------------------------------------------- obsolete
+# Penpot design source and UI mockups from the early phase — superseded by
+# mp3-desktop-frontend. Kept on disk for reference, no longer tracked.
 /mp3-ui/
 /docs/
-/sample-different-filetypes/
+
+# ---------------------------------------------------------------- Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------------------------------------------------------------- Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# ---------------------------------------------------------------- editors / OS
+.idea/
+.vscode/
+*.swp
 .DS_Store
+._*
+
+# ---------------------------------------------------------------- scratch
+# Notepad++ markdown preview artefact.
+.npp-md-preview.html
