@@ -42,6 +42,49 @@ export function EditTrackOverlay() {
   const [saving, setSaving] = useState(false)
   const [coverMenuOpen, setCoverMenuOpen] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
+  // Window geometry: null = default centered size (720px wide). Dragging the
+  // title bar moves it; the corner handle resizes it.
+  const [win, setWin] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ startX: number; startY: number; x: number; y: number; w: number; h: number; mode: 'move' | 'resize' } | null>(null)
+
+  const startMove = (e: React.PointerEvent) => {
+    const el = overlayRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    dragRef.current = { startX: e.clientX, startY: e.clientY, x: rect.left, y: rect.top, w: rect.width, h: rect.height, mode: 'move' }
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const startResize = (e: React.PointerEvent) => {
+    const el = overlayRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    dragRef.current = { startX: e.clientX, startY: e.clientY, x: rect.left, y: rect.top, w: rect.width, h: rect.height, mode: 'resize' }
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const onGeometryMove = (e: React.PointerEvent) => {
+    const drag = dragRef.current
+    if (!drag) return
+    const dx = e.clientX - drag.startX
+    const dy = e.clientY - drag.startY
+    if (drag.mode === 'move') {
+      const w = drag.w
+      const h = drag.h
+      const x = clamp(drag.x + dx, 8, window.innerWidth - w - 8)
+      const y = clamp(drag.y + dy, 8, window.innerHeight - h - 8)
+      setWin({ x, y, w, h })
+    } else {
+      const w = clamp(drag.w + dx, 560, window.innerWidth - 16)
+      const h = clamp(drag.h + dy, 420, window.innerHeight - 16)
+      setWin({ x: drag.x, y: drag.y, w, h })
+    }
+  }
+
+  const endGeometry = () => {
+    dragRef.current = null
+  }
 
   // Initialise the draft when the edited track changes (render-phase
   // adjustment — the component unmounts when the overlay closes).
@@ -165,8 +208,21 @@ export function EditTrackOverlay() {
 
   return (
     <div className="overlay-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !dirty) closeEdit() }}>
-      <div className="overlay">
-        <div className="overlay-titlebar">
+      <div
+        className="overlay wide"
+        ref={overlayRef}
+        style={
+          win
+            ? { position: 'fixed', left: win.x, top: win.y, width: win.w, height: win.h, maxWidth: 'none', maxHeight: 'none' }
+            : undefined
+        }
+      >
+        <div
+          className="overlay-titlebar"
+          onPointerDown={startMove}
+          onPointerMove={onGeometryMove}
+          onPointerUp={endGeometry}
+        >
           <span className="title">Edit Track</span>
           <button className="overlay-close" onClick={() => (dirty ? window.confirm('Discard unsaved changes?') && closeEdit() : closeEdit())} title="Close (Esc)">
             ✕
@@ -175,13 +231,26 @@ export function EditTrackOverlay() {
 
         <div className="overlay-body">
           <div className="edit-top">
-            <div className="edit-cover-col">
-              <div className="cover-box-wrap">
-                <button className="cover-box" onClick={() => setCoverMenuOpen(!coverMenuOpen)} title="Cover art options">
+            <div className="edit-cover- col">
+              <div
+                className="cover-box-wrap"
+                onDragOver={(e) => {
+                  const has = Array.from(e.dataTransfer?.items ?? []).some((i) => i.type.startsWith('image/'))
+                  if (has) e.preventDefault()
+                }}
+                onDrop={(e) => {
+                  const file = Array.from(e.dataTransfer?.files ?? []).find((f) => f.type.startsWith('image/'))
+                  if (file) {
+                    e.preventDefault()
+                    onPickCover(file)
+                  }
+                }}
+              >
+                <button className="cover-box" onClick={() => setCoverMenuOpen(!coverMenuOpen)} title="Cover art options — or drop an image here">
                   {track.cover ? (
                     <img src={'data:' + track.cover.mime + ';base64,' + track.cover.data_base64} alt="Cover art" />
                   ) : (
-                    <MusicArt noteSize={34} />
+                    <MusicArt />
                   )}
                 </button>
                 {coverMenuOpen && (
@@ -267,9 +336,20 @@ export function EditTrackOverlay() {
             {track.writable ? (saving ? 'Saving…' : 'Save') : 'Read-only format'}
           </button>
         </div>
+        <div
+          className="overlay-resize"
+          onPointerDown={startResize}
+          onPointerMove={onGeometryMove}
+          onPointerUp={endGeometry}
+          title="Drag to resize"
+        />
       </div>
     </div>
   )
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(Math.max(v, min), max)
 }
 
 function ReadonlyRow({ label, value }: { label: string; value: string }) {

@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useStore } from '../store-context'
 import { PresetManager } from './PresetManager'
 import { RuleBuilder } from './RuleBuilder'
 import { RuleCard } from './RuleCard'
+import { SavePresetModal } from './SavePresetModal'
 
 function PlusIcon() {
   return (
@@ -24,35 +25,14 @@ export function RulesSidebar() {
     activePresetId,
     loadPreset,
     startApply,
-    savePreset,
-    showToast,
   } = useStore()
-  const [naming, setNaming] = useState(false)
-  const [presetName, setPresetName] = useState(ruleset.name)
   const [manageOpen, setManageOpen] = useState(false)
-  const nameInput = useRef<HTMLInputElement>(null)
-  const builderRef = useRef<HTMLDivElement>(null)
+  const [saveOpen, setSaveOpen] = useState(false)
 
   const enabledCount = ruleset.rules.filter((r) => r.enabled).length
   const applyTarget = selectedPaths.length > 0 ? selectedPaths.length : tracks.length
   const activePreset = presets.find((p) => p.id === activePresetId) ?? null
   const headerLabel = activePreset ? activePreset.name : 'Your ruleset'
-
-  const startNaming = () => {
-    setPresetName(ruleset.name)
-    setNaming(true)
-    requestAnimationFrame(() => nameInput.current?.select())
-  }
-
-  const commitName = async () => {
-    const name = presetName.trim()
-    if (!name) {
-      showToast('Give the preset a name', 'error')
-      return
-    }
-    await savePreset(name, activePreset ? activePreset.id : null)
-    setNaming(false)
-  }
 
   return (
     <aside className="sidebar">
@@ -61,13 +41,13 @@ export function RulesSidebar() {
           <span className="kicker" title={activePreset ? 'Loaded from preset' : ''}>
             {headerLabel}
           </span>
-          <button className="icon-btn" onClick={() => { setDraft(null); builderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) }} title="Add a rule">
+          <button className="icon-btn" onClick={() => setDraft(null)} title="Add a rule">
             <PlusIcon />
           </button>
         </div>
 
         {/* Fixed builder slot — the rules list below never jumps. */}
-        <div ref={builderRef}>
+        <div>
           {draft ? (
             <RuleBuilder />
           ) : (
@@ -86,9 +66,6 @@ export function RulesSidebar() {
                   </button>
                 ))}
               </div>
-              <p className="field-help" style={{ margin: 0 }}>
-                Pick a rule type, fill it in and add it — rules run top to bottom.
-              </p>
             </div>
           )}
         </div>
@@ -117,7 +94,8 @@ export function RulesSidebar() {
                 {p.name}
               </option>
             ))}
-            <option value="__manage__">— Manage rulesets…</option>
+            {presets.length > 0 && <option disabled>──────────────</option>}
+            <option value="__manage__">Manage rulesets…</option>
           </select>
         </div>
 
@@ -127,7 +105,7 @@ export function RulesSidebar() {
           ))}
           {ruleset.rules.length === 0 && (
             <p className="field-help" style={{ margin: '2px 2px 0', lineHeight: 1.5 }}>
-              No rules yet. A rule is one step — e.g. replace “ - ” with “ – ” in the Title field.
+              No rules yet. Add a rule, then click “Apply” to see its changes.
               Rules run top to bottom when you apply them.
             </p>
           )}
@@ -138,36 +116,13 @@ export function RulesSidebar() {
             ▶ {applyTarget === tracks.length ? 'Apply to all files' : 'Apply to selected (' + applyTarget + ')'}
           </button>
 
-          {naming ? (
-            <div className="field-row">
-              <input
-                ref={nameInput}
-                className="input"
-                value={presetName}
-                onChange={(e) => setPresetName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitName()
-                  if (e.key === 'Escape') setNaming(false)
-                }}
-                placeholder="Preset name"
-              />
-              <div className="builder-actions">
-                <button className="text-btn" onClick={() => setNaming(false)}>
-                  Cancel
-                </button>
-                <button className="text-btn primary" onClick={commitName}>
-                  Save
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button className="save-preset-btn" onClick={startNaming} disabled={ruleset.rules.length === 0}>
-              Save as preset
-            </button>
-          )}
+          <button className="save-preset-btn" onClick={() => setSaveOpen(true)} disabled={ruleset.rules.length === 0}>
+            Save as preset
+          </button>
         </div>
       </div>
       {manageOpen && <PresetManager onClose={() => setManageOpen(false)} />}
+      {saveOpen && <SavePresetModal onClose={() => setSaveOpen(false)} />}
     </aside>
   )
 }

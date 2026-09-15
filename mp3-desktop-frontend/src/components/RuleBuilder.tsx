@@ -19,6 +19,7 @@ const SAMPLE_TRACK = {
 interface PreviewState {
   text: string
   hasChanges: boolean
+  error: boolean
 }
 
 export function RuleBuilder() {
@@ -27,34 +28,51 @@ export function RuleBuilder() {
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const spec = registry && draft ? specFor(registry, draft.type) : null
-  const sampleTrack: Track | null = tracks.find((t) => selectedPaths.includes(t.file.path)) ?? tracks[0] ?? null
+  // Preview candidates in order: the selected tracks (in table order), then
+  // the first track, then a built-in sample. The engine returns the first
+  // candidate the rule actually changes.
+  const selectedTracks = tracks.filter((t) => selectedPaths.includes(t.file.path))
+  const orderedCandidates: Track[] = [...selectedTracks]
+  if (tracks.length) orderedCandidates.push(tracks[0])
+  const candidateList = orderedCandidates.length
+    ? orderedCandidates
+        .filter((t, i, all) => all.findIndex((x) => x.file.path === t.file.path) === i)
+        .slice(0, 20)
+    : []
+  const candidatesJson = JSON.stringify(
+    candidateList.map((t) => ({
+      filename: t.file.filename,
+      folder: dirOf(t.file.path),
+      fields: t.fields,
+      cover: t.cover,
+    })),
+  )
   const draftType = draft?.type ?? ''
   const draftParamsJson = JSON.stringify(draft?.params)
-  const sampleFilename = sampleTrack ? sampleTrack.file.filename : SAMPLE_TRACK.filename
-  const sampleFolder = sampleTrack ? dirOf(sampleTrack.file.path) : SAMPLE_TRACK.folder
-  const sampleFieldsJson = JSON.stringify(sampleTrack ? sampleTrack.fields : SAMPLE_TRACK.fields)
+  const hasSample = candidateList.length > 0
 
   useEffect(() => {
     if (!draftType || !spec) return
     if (debounce.current) clearTimeout(debounce.current)
     debounce.current = setTimeout(() => {
-      api
-        .preview(sampleFilename, sampleFolder, JSON.parse(sampleFieldsJson), {
-          id: 'preview',
-          type: draftType,
-          params: JSON.parse(draftParamsJson),
-          enabled: true,
-        })
+      const rule = { id: 'preview', type: draftType, params: JSON.parse(draftParamsJson), enabled: true }
+      const run = hasSample
+        ? api.previewBatch(JSON.parse(candidatesJson), rule)
+        : api.preview(SAMPLE_TRACK.filename, SAMPLE_TRACK.folder, SAMPLE_TRACK.fields, rule)
+      run
         .then((res) => {
-          const text = previewSummary(res.changes, sampleFilename)
-          setPreview({ text, hasChanges: res.changes.length > 0 })
+          setPreview({
+            text: formatPreview(res),
+            hasChanges: res.changes.length > 0,
+            error: false,
+          })
         })
-        .catch(() => setPreview({ text: 'Preview unavailable — engine offline', hasChanges: false }))
+        .catch(() => setPreview({ text: 'Preview unavailable — engine offline', hasChanges: false, error: true }))
     }, 350)
     return () => {
       if (debounce.current) clearTimeout(debounce.current)
     }
-  }, [draftType, draftParamsJson, sampleFilename, sampleFolder, sampleFieldsJson, spec])
+  }, [draftType, draftParamsJson, candidatesJson, hasSample, spec])
 
   if (!registry || !draft || !spec) return null
 
@@ -82,13 +100,17 @@ export function RuleBuilder() {
         {spec.description}
       </p>
 
-      {spec.params.map((param) => (
-        <ParamEditor key={param.name} param={param} />
-      ))}
+      {spec.params
+        .filter((param) => !(spec.type === 'PARSE FILENAME' && param.name === 'include_extension'))
+        .map((param) => (
+          <ParamEditor key={param.name} param={param} />
+        ))}
 
       <div className={'builder-preview' + (preview && !preview.hasChanges ? ' no-changes' : '')}>
         {preview == null ? (
           <span className="muted">Preview…</span>
+        ) : preview.error ? (
+          <span>{preview.text}</span>
         ) : preview.hasChanges ? (
           <span>
             Preview: <strong>{preview.text}</strong>
@@ -107,6 +129,17 @@ export function RuleBuilder() {
         </button>
       </div>
     </div>
+  )
+}
+
+function formatPreview(res: { changes: { field: string; before: string; after: string }[]; filename: string }): string {
+  const cover = res.changes.find((c) => c.field === '__cover__')
+  if (cover) {
+    return cover.after === 'remove' ? 'Cover art: remove existing artwork' : 'Cover art: ' + cover.after
+  }
+  return previewSummary(
+    res.changes.map((c) => ({ ...c, label: c.field, rule_type: null, rule_label: null })),
+    res.filename,
   )
 }
 
@@ -129,8 +162,8 @@ function validateDraft(registry: RegistryResponse, params: RuleParamSpec[], valu
         break
       }
       case 'image': {
-        // null = remove mode, dict = set mode; both are complete
-        if (v !== null && (typeof v !== 'object' || !v)) return false
+        // An image is always required for Set Cover Art.
+        if (!(v && typeof v === 'object' && (v as { data_base64?: string }).data_base64)) return false
         break
       }
       default:
@@ -234,7 +267,7 @@ function ImageParamEditor({ value }: { value: { mime?: string; data_base64?: str
     const dataUrl = await readAsDataUrl(file)
     const mime = dataUrl.slice(5, dataUrl.indexOf(';'))
     const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
-    updateDraftParam('image', { mime, data_base64: b64 })
+    updateDraftParam('image', { mime, data_base64: b64, name: file.name })
   }
 
   return (
@@ -248,14 +281,14 @@ function ImageParamEditor({ value }: { value: { mime?: string; data_base64?: str
             alt="Chosen cover"
           />
         ) : (
-          <span className="image-pick-empty">No image — artwork will be removed</span>
+          <span className="image-pick-empty">No image chosen</span>
         )}
         <button className="text-btn" onClick={() => fileInput.current?.click()}>
           Choose image…
         </button>
         {hasImage && (
           <button className="text-btn" onClick={() => updateDraftParam('image', null)}>
-            Remove
+            Clear
           </button>
         )}
       </div>
@@ -270,7 +303,7 @@ function ImageParamEditor({ value }: { value: { mime?: string; data_base64?: str
           e.target.value = ''
         }}
       />
-      <span className="field-help">Embed this image in every file the ruleset is applied to.</span>
+      {/*<span className="field-help">Embed this image in every file the ruleset is applied to.</span>*/}
     </div>
   )
 }
@@ -295,32 +328,38 @@ function ParsePatternEditor({ pattern }: { pattern: string }) {
         onChange={(e) => updateDraftParam('pattern', e.target.value)}
         spellCheck={false}
       />
-      <span className="field-help">
-        Match the file name. Each * captures a chunk — assign the chunks to fields below.
+      <span className="field-help" style={{ paddingBottom: '8px' }}>
+        Each * captures a chunk - assign chunks to fields below
       </span>
       {assignments.map((a) => (
         <div key={a.index} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span className="field-label" style={{ width: 72, flex: 'none' }}>
             Capture {a.index}
           </span>
-          <select
-            className="select"
-            style={{ flex: 1 }}
-            value={a.field}
-            onChange={(e) => {
-              const next = { ...(draft.params.assignments as Record<string, string>) }
-              if (e.target.value) next[String(a.index)] = e.target.value
-              else delete next[String(a.index)]
-              updateDraftParam('assignments', next)
-            }}
-          >
-            <option value="">— skip —</option>
-            {registry.fields.map((f) => (
-              <option key={f.key} value={f.key}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+            <select
+                className="select"
+                style={{
+                    flex: 1,
+                    color: !a.field ? '#888888' : 'inherit',
+                    fontStyle: !a.field ? 'italic' : 'normal',
+                }}
+                value={a.field}
+                onChange={(e) => {
+                    const next = { ...(draft.params.assignments as Record<string, string>) }
+                    if (e.target.value) next[String(a.index)] = e.target.value
+                    else delete next[String(a.index)]
+                    updateDraftParam('assignments', next)
+                }}
+            >
+                <option value="" style={{ fontStyle: 'italic', color: '#888888' }}>
+                    (skip)
+                </option>
+                {registry.fields.map((f) => (
+                    <option key={f.key} value={f.key} style={{ fontStyle: 'normal', color: 'initial' }}>
+                        {f.label}
+                    </option>
+                ))}
+            </select>
         </div>
       ))}
       {assignments.length === 0 && <span className="field-help">Add a * or ? to the pattern to create captures.</span>}

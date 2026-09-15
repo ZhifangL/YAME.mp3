@@ -3,16 +3,17 @@ import './App.css'
 import { ApplyReviewModal } from './components/ApplyReviewModal'
 import { DetailPanel } from './components/DetailPanel'
 import { EditTrackOverlay } from './components/EditTrackOverlay'
-import { FolderBrowser } from './components/FolderBrowser'
+
 import { RulesSidebar } from './components/RulesSidebar'
 import { StatusBar } from './components/StatusBar'
 import { TitleBar } from './components/TitleBar'
 import { Toast } from './components/Toast'
 import { TrackTable } from './components/TrackTable'
+import { PickerInputs } from './pickers'
 import { useStore } from './store-context'
 
 function App() {
-  const { init, folderBrowserOpen, editTrackPath } = useStore()
+  const { init, editTrackPath } = useStore()
 
   useEffect(() => {
     init()
@@ -29,9 +30,9 @@ function App() {
           <DetailPanel />
         </div>
       </div>
-      {folderBrowserOpen && <FolderBrowser />}
       {editTrackPath && <EditTrackOverlay />}
       <ApplyReviewModal />
+      <PickerInputs />
       <Toast />
     </div>
   )

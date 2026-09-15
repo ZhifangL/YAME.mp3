@@ -11,7 +11,7 @@ from pathlib import Path
 from app.services.audio_io import AUDIO_SUFFIXES
 
 
-def list_directory(path: str | None = None, *, include_hidden: bool = False) -> dict:
+def list_directory(path: str | None = None, *, include_hidden: bool = False, recursive: bool = False) -> dict:
     """List sub-folders and audio files inside *path* (default: home folder).
 
     Returns:
@@ -38,25 +38,60 @@ def list_directory(path: str | None = None, *, include_hidden: bool = False) -> 
     audio_files: list[dict] = []
     entries.sort(key=lambda entry: entry.name.casefold())
 
-    for entry in entries:
-        if entry.name.startswith(".") and not include_hidden:
-            continue
-        try:
-            if entry.is_dir():
-                folders.append({"name": entry.name, "path": str(entry)})
-            elif entry.is_file() and entry.suffix.lower() in AUDIO_SUFFIXES:
-                stat = entry.stat()
-                audio_files.append(
-                    {
-                        "name": entry.name,
-                        "path": str(entry),
-                        "size_bytes": int(stat.st_size),
-                        "modified_unix": float(stat.st_mtime),
-                    }
-                )
-        except OSError:
-            # Broken symlink / vanishing entry - skip it silently.
-            continue
+    if recursive:
+        # Gather every audio file in the tree below *base* (bounded depth,
+        # hidden/system directories skipped).
+        stack: list[Path] = [base]
+        seen_dirs = 0
+        while stack:
+            current = stack.pop()
+            seen_dirs += 1
+            if seen_dirs > 5000:
+                break
+            try:
+                children = list(current.iterdir())
+            except OSError:
+                continue
+            children.sort(key=lambda entry: entry.name.casefold())
+            for entry in children:
+                if entry.name.startswith(".") and not include_hidden:
+                    continue
+                try:
+                    if entry.is_dir():
+                        if entry.name not in {"node_modules", "__pycache__"}:
+                            stack.append(entry)
+                    elif entry.is_file() and entry.suffix.lower() in AUDIO_SUFFIXES:
+                        stat = entry.stat()
+                        audio_files.append(
+                            {
+                                "name": entry.name,
+                                "path": str(entry),
+                                "size_bytes": int(stat.st_size),
+                                "modified_unix": float(stat.st_mtime),
+                            }
+                        )
+                except OSError:
+                    continue
+    else:
+        for entry in entries:
+            if entry.name.startswith(".") and not include_hidden:
+                continue
+            try:
+                if entry.is_dir():
+                    folders.append({"name": entry.name, "path": str(entry)})
+                elif entry.is_file() and entry.suffix.lower() in AUDIO_SUFFIXES:
+                    stat = entry.stat()
+                    audio_files.append(
+                        {
+                            "name": entry.name,
+                            "path": str(entry),
+                            "size_bytes": int(stat.st_size),
+                            "modified_unix": float(stat.st_mtime),
+                        }
+                    )
+            except OSError:
+                # Broken symlink / vanishing entry - skip it silently.
+                continue
 
     parent = str(base.parent) if base.parent != base else None
     return {
@@ -65,3 +100,147 @@ def list_directory(path: str | None = None, *, include_hidden: bool = False) -> 
         "folders": folders,
         "audio_files": audio_files,
     }
+
+
+# ---------------------------------------------------------------------------
+# Dev-mode native folder picker support
+#
+# A browser cannot read the absolute path of a folder the user picked with
+# the OS dialog (privacy), but it does get the relative paths. This search
+# resolves the folder name + relative entry list to an absolute path on the
+# local machine. The packaged Tauri app skips this entirely and passes the
+# absolute path straight from the native dialog plugin.
+# ---------------------------------------------------------------------------
+_PRUNED_DIR_NAMES = {
+    "Library", ".git", "node_modules", ".venv", "__pycache__",
+    "Applications", "System", "private", "dev", "usr", "bin", "sbin",
+    "opt", "etc", "var", "Volumes", ".Trash", "cores",
+}
+
+_SEARCH_ROOTS: list[Path] = []
+
+
+def _search_roots() -> list[Path]:
+    if _SEARCH_ROOTS:
+        return _SEARCH_ROOTS
+    home = Path.home()
+    roots = [home]
+    for name in ("Music", "Downloads", "Documents", "Desktop", "Movies", "Pictures", "Public"):
+        candidate = home / name
+        if candidate.is_dir():
+            roots.append(candidate)
+    volumes = Path("/Volumes")
+    if volumes.is_dir():
+        try:
+            roots.extend(p for p in volumes.iterdir() if p.is_dir())
+        except OSError:
+            pass
+    users = Path("/Users")
+    if users.is_dir():
+        roots.append(users)
+    _SEARCH_ROOTS.extend(roots)
+    return roots
+
+
+def _walk_dirs(roots: list[Path], max_dirs: int = 40000, max_depth: int = 6):
+    """Depth-first walk over *roots*, yielding (dir_path, depth).
+
+    Prunes hidden and system directories to keep the search fast. Depth is
+    relative to each root.
+    """
+    visited = 0
+    for root in roots:
+        if not root.is_dir():
+            continue
+        stack = [(root, 0)]
+        while stack:
+            current, depth = stack.pop()
+            visited += 1
+            if visited > max_dirs:
+                return
+            yield current, depth
+            if current.name.startswith(".") or current.name in _PRUNED_DIR_NAMES:
+                continue
+            if depth >= max_depth:
+                continue
+            try:
+                children = list(current.iterdir())
+            except OSError:
+                continue
+            for child in children:
+                try:
+                    if child.is_dir() and not child.is_symlink():
+                        stack.append((child, depth + 1))
+                except OSError:
+                    continue
+
+
+def resolve_folder(name: str, entries: list[str], previous_path: str | None = None) -> str | None:
+    """Find an absolute path for a folder picked via the native dialog.
+
+    The browser reports relative paths that start with the picked folder's
+    name ("MyFolder/sub/file.mp3"), so that leading segment is stripped
+    before matching against each candidate directory.
+    """
+    if not name:
+        return None
+    wanted: list[str] = []
+    for entry in entries:
+        rel = entry.replace("\\", "/")
+        parts = rel.split("/")
+        if parts and parts[0] == name:
+            parts = parts[1:]
+        if parts:
+            wanted.append("/".join(parts))
+
+    def matches(base: Path) -> bool:
+        # Signature check: every reported entry must exist under the folder.
+        return all((base / rel).exists() for rel in wanted)
+
+    roots: list[Path] = []
+    if previous_path:
+        prev = Path(previous_path).expanduser()
+        roots.append(prev.parent if prev.is_file() else prev)
+    roots.extend(_search_roots())
+    for candidate, _depth in _walk_dirs(roots):
+        if candidate.name == name and matches(candidate):
+            return str(candidate)
+    return None
+
+
+def resolve_files(names: list[str], previous_path: str | None = None) -> list[str]:
+    """Find absolute paths for individually picked files by exact file name.
+
+    Dev-mode only (browsers hide absolute paths from file inputs); the
+    packaged Tauri app gets paths straight from the native dialog.
+    Returns one path per wanted name (or fewer when a name is not found).
+    """
+    wanted = [n for n in (names or []) if n and "/" not in n]
+    if not wanted:
+        return []
+    remaining = {name.casefold(): name for name in wanted}
+    found: dict[str, str] = {}
+
+    roots: list[Path] = []
+    if previous_path:
+        prev = Path(previous_path).expanduser()
+        roots.append(prev.parent if prev.is_file() else prev)
+    roots.extend(_search_roots())
+
+    for directory, _depth in _walk_dirs(roots):
+        try:
+            entries = list(directory.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            try:
+                if not entry.is_file():
+                    continue
+            except OSError:
+                continue
+            key = entry.name.casefold()
+            if key in remaining:
+                found[remaining.pop(key)] = str(entry)
+                if not remaining:
+                    return [found[name] for name in wanted if name in found]
+    return [found[name] for name in wanted if name in found]

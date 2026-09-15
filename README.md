@@ -25,7 +25,7 @@ as a preset for next time.
   | COPY FROM | Copies one field (or the file name) into another | Copy Year → Album |
   | PARSE FILENAME | Matches the file name against a pattern, fills fields from captures | `* - *` → Artist, Title |
   | CHANGE CASE | UPPER, lower, Title or Sentence case | Title → Title Case |
-  | SET COVER | Embeds the same artwork in every file (empty = remove artwork) | Batch album art |
+  | SET COVER | Embeds the same artwork in every file, or removes existing artwork | Batch album art |
 - **Live preview** — the rule builder shows the before/after on a real selected
   track before you commit the rule.
 - **Dry-run review** — Apply always previews every per-file change first;
@@ -40,11 +40,22 @@ as a preset for next time.
   clicking the artwork, dropping an image from Finder, or pasting from the
   clipboard; the edit window can also remove it, and the SET COVER rule
   batches it across files.
-- **Familiar layout** — rules sidebar, MP3tag-style track table with sortable
-  columns (Filename/Title stay frozen while the rest scrolls), search, a
-  floating "iPod" detail panel (open by default, collapsible, supports cover
-  drag & drop) and a full edit window (double-click a row) with a "More info"
-  section.
+- **Familiar layout** — rules sidebar, MP3tag-style track table with a sticky
+  header row, sortable / reorderable / resizable columns (right-click a header
+  to freeze or hide columns — your layout persists between sessions), search,
+  Ctrl/Cmd+A select-all, a floating "iPod" detail panel anchored bottom-right
+  (collapsible, cover drag & drop / paste) and a draggable, resizable edit
+  window (double-click a row) with a "More info" section.
+- **Track context menu** — right-click a song for Open (default app), Open
+  with…, Copy, Paste, Remove from list and Show in Finder. These use real OS
+  integration in the packaged Tauri app (shell + pasteboard plugins); the
+  browser dev build degrades gracefully with clipboard text and toasts.
+- **Native open dialogs** — one "Add music" button opens the OS folder picker
+  (Finder/Explorer) and imports every audio file in that folder *and its
+  sub-folders*; you can also drop files or folders straight onto the track
+  list. Browsers hide absolute paths, so dev mode re-locates the pick on disk;
+  the packaged Tauri build passes paths straight from the native dialog plugin
+  (no upload ever happens — files stay local).
 - The rule engine is **extensible by design**: every rule is a self-describing
   class in `app/services/rules.py`, registered in one place, and the UI
   renders its editor automatically from the engine's registry — adding a new
@@ -78,16 +89,18 @@ You need Node 20+, pnpm, and Python 3.13 with `uv`.
 # 1. engine (terminal 1)
 cd mp3-metadata-api
 uv sync
-.venv/bin/uvicorn main:app --port 8000
+.venv/bin/python main.py          # picks a free port (8000 unless taken)
 
 # 2. UI (terminal 2)
 cd mp3-desktop-frontend
 pnpm install
-pnpm run dev
+pnpm run dev                      # the proxy follows the engine's port automatically
 ```
 
-Open <http://localhost:5173>. The Vite dev server proxies `/api` to the
-engine. To skip the folder picker while developing:
+The engine writes its actual port to `~/.config/tagforge/engine.port` and
+falls back to an ephemeral port when 8000 is busy, so the dev proxy and the
+future Tauri sidecar launcher never hard-code a port. To auto-load a folder
+while developing:
 
 ```
 http://localhost:5173/?folder=/absolute/path/to/music

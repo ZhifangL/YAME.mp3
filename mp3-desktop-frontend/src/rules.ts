@@ -14,6 +14,10 @@ export function defaultParams(specParams: RuleParamSpec[]): Record<string, unkno
       out[p.name] = {}
       continue
     }
+    if (p.kind === 'image') {
+      out[p.name] = null
+      continue
+    }
     if (p.kind === 'bool') {
       out[p.name] = p.default ?? true
       continue
@@ -50,13 +54,18 @@ export function describeRule(registry: RegistryResponse, rule: RuleInstance): st
     case 'PARSE FILENAME':
       return 'Parse file name with "' + str(p.pattern) + '"'
     case 'SET COVER': {
-      const image = p.image as { mime?: string; data_base64?: string } | null | undefined
+      // Legacy rulesets may still carry a mode param.
+      if (String(p.mode ?? 'set') === 'remove') return 'Remove cover art'
+      const image = p.image as { mime?: string; data_base64?: string; name?: string } | null | undefined
       if (image && image.data_base64) {
+        if (image.name) return 'Set cover art (' + image.name + ')'
         const ext = String(image.mime || 'image').split('/').pop() || 'image'
         return 'Set cover art (' + ext + ')'
       }
-      return 'Remove cover art'
+      return 'Set cover art'
     }
+    case 'REMOVE COVER':
+      return 'Remove cover art'
     case 'CHANGE CASE': {
       const mode = String(p.mode ?? 'title')
       const choice = spec.params

@@ -82,6 +82,14 @@ class RuleContext:
         self.filename = filename or ""
         self.parent_dir = parent_dir or ""
         self.path = path or ""
+        # Cover art works like a field: rules mutate this state in order, so a
+        # ruleset of [SET COVER, REMOVE COVER] ends with no artwork and the
+        # reverse order ends with the image — the last rule always wins.
+        self.cover_state: dict[str, Any] = {
+            "mime": clean.get("__cover_mime__") or None,
+            "data": clean.get("__cover_data__") or None,
+            "name": "",
+        }
 
     def get(self, key: str) -> str:
         if key == "filename":
@@ -131,6 +139,16 @@ class Rule(ABC):
         if before == after:
             return None
         return {"field": key, "label": field_label(key), "before": before, "after": after}
+
+
+def _clear_cover_state(ctx) -> list[dict]:
+    """Sequential removal of the working cover state (used by SET COVER's
+    legacy remove mode and by the REMOVE COVER rule)."""
+    if not ctx.cover_state.get("data"):
+        return []
+    ctx.cover_state = {"mime": None, "data": None, "name": ""}
+    return [{"field": "__cover__", "label": "Cover Art",
+             "before": "artwork present", "after": "remove"}]
 
 
 class ClearRule(Rule):
@@ -242,8 +260,8 @@ class CopyFromRule(Rule):
     label = "Copy From"
     description = "Copy the value of another field (or File Name) into this field."
     params = [
-        {"name": "field", "label": "Into field", "kind": "field", "default": "album"},
         {"name": "source", "label": "From field", "kind": "field", "default": "date"},
+        {"name": "field", "label": "Into field", "kind": "field", "default": "album"},
     ]
 
     def apply(self, ctx, params):
@@ -265,7 +283,7 @@ class CopyFromRule(Rule):
 class ParseFilenameRule(Rule):
     type = "PARSE FILENAME"
     label = "Parse Filename"
-    description = "Match the file name against a pattern and fill fields from the captures."
+    description = "Fill in fields based on filename pattern"
     params = [
         {"name": "pattern", "label": "Pattern", "kind": "parse_pattern", "placeholder": "Artist - Title",
          "help": "Each * captures a chunk of the file name. Assign each capture to a field below."},
@@ -316,40 +334,52 @@ class SetCoverRule(Rule):
 
     type = "SET COVER"
     label = "Set Cover Art"
-    description = "Embed the same cover art in every file (or remove all artwork)."
+    description = ""
     params = [
         {"name": "image", "label": "Cover image", "kind": "image",
-         "help": "Pick an image file (PNG/JPEG). Leave empty to remove existing artwork."},
+         "help": "Pick an image file (PNG/JPEG)."},
     ]
 
     def apply(self, ctx, params):
         image = params.get("image")
+        mode = str(params.get("mode") or "set")
+        image_data = None
+        mime = "image/jpeg"
+        name = ""
         if isinstance(image, dict):
+            image_data = image.get("data_base64") or ""
             mime = str(image.get("mime") or "image/jpeg")
-            data = image.get("data_base64") or ""
-            if not data:
-                if not ctx.get("__has_cover__"):
-                    return []
-                return [{"field": "__cover__", "label": "Cover Art",
-                         "before": "artwork present", "after": "remove"}]
-            before = "artwork present" if ctx.get("__has_cover__") else "no artwork"
-            return [{"field": "__cover__", "label": "Cover Art", "before": before,
-                     "after": mime + " (" + str(len(data) // 1024) + " KB)", "_mime": mime,
-                     "_data_base64": data}]
-        return []
+            name = str(image.get("name") or "")
+        # Legacy "remove" mode or an empty image: strip artwork.
+        if mode == "remove" or not image_data:
+            return _clear_cover_state(ctx)
+        # No-op when the working state already holds exactly this image.
+        if ctx.cover_state.get("data") == image_data:
+            return []
+        before = "artwork present" if ctx.cover_state.get("data") else "no artwork"
+        ctx.cover_state = {"mime": mime, "data": image_data, "name": name}
+        after = name or (mime.split("/")[-1] + " image")
+        return [{"field": "__cover__", "label": "Cover Art", "before": before,
+                 "after": after, "_mime": mime, "_data_base64": image_data}]
 
     @classmethod
     def describe(cls, params):
+        mode = str(params.get("mode") or "set")
+        if mode == "remove":
+            return "Remove cover art"
         image = params.get("image")
         if isinstance(image, dict) and image.get("data_base64"):
+            name = str(image.get("name") or "")
+            if name:
+                return "Set cover art (" + name + ")"
             return "Set cover art (" + str(image.get("mime") or "image").split("/")[-1] + ")"
-        return "Remove cover art"
+        return "Set cover art"
 
 
 class ChangeCaseRule(Rule):
     type = "CHANGE CASE"
     label = "Change Case"
-    description = "Convert a field to UPPER CASE, lower case, Title Case or Sentence case."
+    description = ""
     params = [
         {"name": "field", "label": "In field", "kind": "field", "default": "title"},
         {"name": "mode", "label": "To", "kind": "choice", "default": "title",
@@ -365,6 +395,15 @@ class ChangeCaseRule(Rule):
                     "at", "by", "in", "of", "on", "to", "up", "via", "vs", "vs.",
                     "with", "de", "la", "le", "el", "da", "von", "van"}
 
+    @staticmethod
+    def _upper_first_letter(word: str) -> str:
+        """Upper-case the first LETTER, wherever it sits — so '(audio)'
+        becomes '(Audio)' and '5seconds' becomes '5Seconds'."""
+        for i, ch in enumerate(word):
+            if ch.isalpha():
+                return word[:i] + ch.upper() + word[i + 1:].lower()
+        return word  # no letters at all
+
     @classmethod
     def _title_case(cls, text: str) -> str:
         out: list[str] = []
@@ -379,7 +418,7 @@ class ChangeCaseRule(Rule):
             elif word.isupper():
                 out.append(word)
             else:
-                out.append(word[:1].upper() + word[1:].lower())
+                out.append(cls._upper_first_letter(word))
             first = False
         return "".join(out)
 
@@ -395,7 +434,7 @@ class ChangeCaseRule(Rule):
                 out.append(part)
                 cap_next = True
             elif cap_next:
-                out.append(part[:1].upper() + part[1:] if part else part)
+                out.append(cls._upper_first_letter(part))
                 cap_next = False
             else:
                 out.append(part)
@@ -432,6 +471,20 @@ def register(cls: type[Rule]) -> type[Rule]:
     REGISTRY[cls.type] = cls
     return cls
 
+class RemoveCoverRule(Rule):
+    """Delete embedded artwork from every file (no parameters)."""
+
+    type = "REMOVE COVER"
+    label = "Remove Cover Art"
+    description = ""
+    params = []
+
+    def apply(self, ctx, params):
+        return _clear_cover_state(ctx)
+
+    @classmethod
+    def describe(cls, params):
+        return "Remove cover art"
 
 register(ClearRule)
 register(ReplaceRule)
@@ -441,7 +494,7 @@ register(CopyFromRule)
 register(ParseFilenameRule)
 register(ChangeCaseRule)
 register(SetCoverRule)
-
+register(RemoveCoverRule)
 
 def registry_specs() -> list[dict]:
     """Self-describing rule catalog for the UI (kept in definition order)."""

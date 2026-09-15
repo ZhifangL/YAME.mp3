@@ -263,22 +263,61 @@ class VorbisAdapter:
                 data = getattr(picture, "data", None)
                 if data:
                     return getattr(picture, "mime", "image/jpeg") or "image/jpeg", bytes(data)
+            return None
+        # OGG / Opus: cover art travels as a FLAC-picture block base64-encoded
+        # in a Vorbis comment (standard "METADATA_BLOCK_PICTURE", with the
+        # legacy "coverart" key as a fallback).
+        if self.fileobj.tags is None:
+            return None
+        for key in ("metadata_block_picture", "coverart"):
+            value = self.fileobj.tags.get(key)
+            if not value:
+                continue
+            encoded = str(value[0]) if isinstance(value, (list, tuple)) else str(value)
+            try:
+                raw = __import__("base64").b64decode(encoded)
+            except Exception:
+                continue
+            if key == "metadata_block_picture":
+                try:
+                    picture = mutagen.flac.Picture(raw)
+                    return getattr(picture, "mime", "image/jpeg") or "image/jpeg", bytes(picture.data)
+                except Exception:
+                    continue
+            return "image/jpeg", raw
         return None
 
     def set_cover(self, mime: str, data: bytes) -> None:
-        if not isinstance(self.fileobj, mutagen.flac.FLAC):
+        if isinstance(self.fileobj, mutagen.flac.FLAC):
+            picture = mutagen.flac.Picture()
+            picture.type = 3
+            picture.mime = mime
+            picture.desc = "Cover"
+            picture.data = data
+            self.fileobj.clear_pictures()
+            self.fileobj.add_picture(picture)
+            return
+        # OGG / Opus: write the FLAC-picture block into a Vorbis comment.
+        if self.fileobj.tags is None:
             return
         picture = mutagen.flac.Picture()
         picture.type = 3
         picture.mime = mime
         picture.desc = "Cover"
         picture.data = data
-        self.fileobj.clear_pictures()
-        self.fileobj.add_picture(picture)
+        import base64 as _b64
+
+        self.fileobj.tags["metadata_block_picture"] = [_b64.b64encode(picture.write()).decode("ascii")]
 
     def remove_cover(self) -> None:
         if isinstance(self.fileobj, mutagen.flac.FLAC):
             self.fileobj.clear_pictures()
+            return
+        if self.fileobj.tags is None:
+            return
+        for key in ("metadata_block_picture", "coverart"):
+            if key in self.fileobj.tags:
+                del self.fileobj.tags[key]
 
 
 class ApeAdapter:
@@ -682,7 +721,12 @@ def apply_ruleset(paths: list[str], ruleset: dict, dry_run: bool) -> dict:
         filename = md["file"]["filename"]
         parent_dir = str(Path(path).parent)
         rule_fields = dict(md["fields"])
-        rule_fields["__has_cover__"] = "1" if md.get("cover") else ""
+        original_cover = md.get("cover")
+        original_data = (original_cover or {}).get("data_base64", "") or ""
+        original_mime = (original_cover or {}).get("mime") or "image/jpeg"
+        rule_fields["__has_cover__"] = "1" if original_data else ""
+        rule_fields["__cover_data__"] = original_data
+        rule_fields["__cover_mime__"] = original_mime
         ctx = RuleContext(fields=rule_fields, filename=filename, parent_dir=parent_dir, path=path)
         final_fields, _rule_changes = run_ruleset(ctx, ruleset.get("rules") or [])
 
@@ -698,10 +742,28 @@ def apply_ruleset(paths: list[str], ruleset: dict, dry_run: bool) -> dict:
                     "before": before,
                     "after": value,
                 })
-        # Cover art changes ride along as special change records.
-        cover_changes = [c for c in _rule_changes if c.get("field") == "__cover__"]
-        if cover_changes:
-            changes.extend({k: v for k, v in c.items() if k in ("field", "label", "before", "after")} for c in cover_changes)
+        # Cover art composes sequentially inside the ruleset: report one
+        # change record reflecting the NET effect of all cover rules.
+        final_data = ctx.cover_state.get("data") or ""
+        final_mime = ctx.cover_state.get("mime") or "image/jpeg"
+        final_name = ctx.cover_state.get("name") or ""
+        if final_data != original_data:
+            if final_data:
+                changes.append({
+                    "field": "__cover__",
+                    "label": "Cover Art",
+                    "before": "artwork present" if original_data else "no artwork",
+                    "after": final_name or (final_mime.split("/")[-1] + " image"),
+                    "_mime": final_mime,
+                    "_data_base64": final_data,
+                })
+            else:
+                changes.append({
+                    "field": "__cover__",
+                    "label": "Cover Art",
+                    "before": "artwork present" if original_data else "no artwork",
+                    "after": "remove",
+                })
         new_filename = ctx.filename
         rename = new_filename != filename
         if rename:
@@ -714,6 +776,7 @@ def apply_ruleset(paths: list[str], ruleset: dict, dry_run: bool) -> dict:
 
         warnings: list[str] = []
         written = False
+        cover_action = next((c for c in changes if c.get("field") == "__cover__"), None)
         if not dry_run and (changes or rename):
             try:
                 write_changes = {
@@ -725,7 +788,6 @@ def apply_ruleset(paths: list[str], ruleset: dict, dry_run: bool) -> dict:
                     warnings.extend(write_fields(path, write_changes, rename_to=new_filename if rename else None))
                 elif rename:
                     warnings.extend(write_fields(path, {}, rename_to=new_filename))
-                cover_action = next((c for c in _rule_changes if c.get("field") == "__cover__"), None)
                 if cover_action:
                     if cover_action.get("after") == "remove":
                         warnings.extend(remove_cover(path))

@@ -48,20 +48,21 @@ export interface Store {
 
   selectedPaths: string[]
   search: string
-  sortKey: SortKey
+  sortKey: SortKey | null
   sortDir: 1 | -1
 
   ruleset: Ruleset
   draft: BuilderDraft | null
 
   editTrackPath: string | null
-  folderBrowserOpen: boolean
   applyReview: ApplyResponse | null
   applying: boolean
   toast: ToastState | null
 
   init: () => void
   loadFolder: (folderPath: string, paths?: string[]) => void
+  appendPaths: (paths: string[]) => Promise<void>
+  replacePaths: (paths: string[]) => Promise<void>
   reloadTrack: (path: string) => Promise<void>
   upsertTrack: (track: Track) => void
   removeTrack: (path: string) => void
@@ -87,8 +88,6 @@ export interface Store {
 
   openEdit: (path: string) => void
   closeEdit: () => void
-  openFolderBrowser: () => void
-  closeFolderBrowser: () => void
 
   writeFields: (path: string, fields: Record<string, string>, renameTo?: string | null) => Promise<string[]>
   setCover: (path: string, mime: string, dataBase64: string) => Promise<void>

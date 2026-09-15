@@ -117,6 +117,17 @@ class PreviewRequest(BaseModel):
     filename: str
     folder: str = ""
     fields: dict[str, str] = {}
+    cover: Optional[CoverInfo] = None
+    rule: RuleInstance
+
+class PreviewCandidate(BaseModel):
+    filename: str
+    folder: str = ""
+    fields: dict[str, str] = {}
+    cover: Optional[CoverInfo] = None
+
+class PreviewBatchRequest(BaseModel):
+    candidates: list[PreviewCandidate] = []
     rule: RuleInstance
 
 
@@ -124,6 +135,26 @@ class PreviewResponse(BaseModel):
     changes: list[ChangeRecord] = []
     fields: dict[str, str] = {}
     filename: str = ""
+    matched_index: Optional[int] = None
+
+
+class FolderResolveRequest(BaseModel):
+    name: str
+    entries: list[str] = []
+    previous_path: Optional[str] = None
+
+
+class FolderResolveResponse(BaseModel):
+    path: Optional[str] = None
+
+
+class FilesResolveRequest(BaseModel):
+    names: list[str] = []
+    previous_path: Optional[str] = None
+
+
+class FilesResolveResponse(BaseModel):
+    paths: list[str] = []
 
 
 class TracksReadRequest(BaseModel):

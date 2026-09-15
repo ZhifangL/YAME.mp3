@@ -17,7 +17,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [search, setSearch] = useState('')
-  const [sortKey, setSortKey] = useState<SortKey>('filename')
+  // null = no sorting: tracks appear in the order they were found in the
+  // folder (Finder order). Sorting kicks in on the first column click.
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<1 | -1>(1)
 
   const [ruleset, setRuleset] = useState<Ruleset>({ name: 'Untitled ruleset', rules: [] })
@@ -25,7 +27,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [activePresetId, setActivePresetId] = useState<string | null>(null)
 
   const [editTrackPath, setEditTrackPath] = useState<string | null>(null)
-  const [folderBrowserOpen, setFolderBrowserOpen] = useState(false)
   const [applyReview, setApplyReview] = useState<ApplyResponse | null>(null)
   const [applying, setApplying] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
@@ -56,6 +57,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
   }, [])
 
+  // Sorting returns to natural (folder) order whenever a new folder replaces
+  // the trackview.
+  const resetSort = useCallback(() => {
+    setSortKey(null)
+    setSortDir(1)
+  }, [])
+
   const loadFolder = useCallback((path: string, explicitPaths?: string[]) => {
     setLoadingTracks(true)
     setEngineError(null)
@@ -68,6 +76,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setFolderPath(folderPathValue)
           setSelectedPaths([])
           setSearch('')
+          resetSort()
           if (res.errors && res.errors.length) {
             showToast(res.errors.length + ' file(s) could not be read', 'error')
           }
@@ -109,6 +118,69 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }, 0)
     return () => clearTimeout(timer)
   }, [loadFolder])
+
+  // Replace the whole trackview with the given files (e.g. "Open" / drops).
+  const replacePaths = useCallback(
+    async (paths: string[]) => {
+      if (!paths.length) {
+        setTracks([])
+        setFolderPath(null)
+        setSelectedPaths([])
+        return
+      }
+      setLoadingTracks(true)
+      try {
+        const res = await api.readTracks(paths)
+        setTracks(res.tracks)
+        setFolderPath(res.tracks.length ? dirOf(res.tracks[0].file.path) : null)
+        setSelectedPaths([])
+        setSearch('')
+        resetSort()
+        if (res.errors && res.errors.length) {
+          showToast(res.errors.length + ' file(s) could not be read', 'error')
+        }
+        if (res.tracks.length) {
+          showToast('Loaded ' + res.tracks.length + ' track' + (res.tracks.length === 1 ? '' : 's'), 'success')
+        }
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : String(err), 'error')
+      } finally {
+        setLoadingTracks(false)
+      }
+    },
+    [showToast],
+  )
+
+  // Add tracks from subsequently picked folders/files without dropping the
+  // ones already in the table.
+  const appendPaths = useCallback(
+    async (paths: string[]) => {
+      if (!paths.length) return
+      setLoadingTracks(true)
+      try {
+        const res = await api.readTracks(paths)
+        setTracks((current) => {
+          const byPath = new Map(current.map((t) => [t.file.path, t]))
+          for (const t of res.tracks) byPath.set(t.file.path, t)
+          return Array.from(byPath.values())
+        })
+        if (res.tracks.length) {
+          setFolderPath((current) => current ?? dirOf(res.tracks[0].file.path))
+        }
+        if (res.errors && res.errors.length) {
+          showToast(res.errors.length + ' file(s) could not be read', 'error')
+        }
+        if (res.tracks.length) {
+          showToast('Added ' + res.tracks.length + ' track' + (res.tracks.length === 1 ? '' : 's'), 'success')
+        }
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : String(err), 'error')
+      } finally {
+        setLoadingTracks(false)
+      }
+    },
+    [showToast],
+  )
 
   const reloadTrack = useCallback(
     async (path: string) => {
@@ -167,16 +239,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const clearSelection = useCallback(() => setSelectedPaths([]), [])
 
-  const cycleSort = useCallback((key: SortKey) => {
-    setSortKey((currentKey) => {
-      if (currentKey === key) {
+  const cycleSort = useCallback(
+    (key: SortKey) => {
+      // Two independent updates — the previous version nested one setState
+      // inside the other's updater, which StrictMode double-invocation
+      // flipped back, so descending never stuck.
+      if (sortKey === key) {
         setSortDir((dir) => (dir === 1 ? -1 : 1))
-        return key
+      } else {
+        setSortKey(key)
+        setSortDir(1)
       }
-      setSortDir(1)
-      return key
-    })
-  }, [])
+    },
+    [sortKey],
+  )
 
   // Structural ruleset changes detach the active preset (the ruleset no
   // longer matches what was loaded).
@@ -313,8 +389,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const openEdit = useCallback((path: string) => setEditTrackPath(path), [])
   const closeEdit = useCallback(() => setEditTrackPath(null), [])
-  const openFolderBrowser = useCallback(() => setFolderBrowserOpen(true), [])
-  const closeFolderBrowser = useCallback(() => setFolderBrowserOpen(false), [])
 
   const writeFields = useCallback(
     async (path: string, fields: Record<string, string>, renameTo?: string | null): Promise<string[]> => {
@@ -507,12 +581,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ruleset,
       draft,
       editTrackPath,
-      folderBrowserOpen,
       applyReview,
       applying,
       toast,
       init,
       loadFolder,
+      appendPaths,
+      replacePaths,
       reloadTrack,
       upsertTrack,
       removeTrack,
@@ -535,8 +610,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setName,
       openEdit,
       closeEdit,
-      openFolderBrowser,
-      closeFolderBrowser,
       writeFields,
       setCover,
       removeCover,
@@ -552,12 +625,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [
       registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError,
       selectedPaths, search, sortKey, sortDir, ruleset, draft, editTrackPath,
-      folderBrowserOpen, applyReview, applying, toast,
-      init, loadFolder, reloadTrack, upsertTrack, removeTrack, clearTracks,
+      applyReview, applying, toast,
+      init, loadFolder, appendPaths, replacePaths, reloadTrack, upsertTrack, removeTrack, clearTracks,
       toggleSelect, selectOnly, selectRange, clearSelection, setSearch, cycleSort,
       setDraft, updateDraftParam, updateDraftType, cancelDraft, addRule, commitDraft,
       removeRule, toggleRule, reorderRules, setName, openEdit,
-      closeEdit, openFolderBrowser, closeFolderBrowser, writeFields, setCover, removeCover,
+      closeEdit, writeFields, setCover, removeCover,
       startApply, confirmApply, cancelApply, savePreset, loadPreset,
       deletePreset, importPresets, showToast,
     ],

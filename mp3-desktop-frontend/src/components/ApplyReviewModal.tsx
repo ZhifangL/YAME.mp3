@@ -14,8 +14,8 @@ export function ApplyReviewModal() {
         <div className="modal-header">
           <h3>Review changes</h3>
           <p>
-            The ruleset will change {applyReview.changed_files} of {applyReview.total_files} file
-            {applyReview.total_files === 1 ? '' : 's'}. Nothing has been written yet.
+            {applyReview.changed_files} of {applyReview.total_files} file
+            {applyReview.total_files === 1 ? '' : 's'} affected by this ruleset
           </p>
         </div>
         <div className="review-list">

@@ -43,8 +43,10 @@ function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const api = {
-  browse: (path?: string): Promise<BrowseResponse> =>
-    request<BrowseResponse>('/browse' + (path ? '?path=' + encodeURIComponent(path) : '')),
+  browse: (path?: string, recursive = false): Promise<BrowseResponse> =>
+    request<BrowseResponse>(
+      '/browse' + (path ? '?path=' + encodeURIComponent(path) : '') + (recursive ? (path ? '&' : '?') + 'recursive=true' : ''),
+    ),
 
   registry: (): Promise<RegistryResponse> => request<RegistryResponse>('/rules/registry'),
 
@@ -62,6 +64,18 @@ export const api = {
 
   preview: (filename: string, folder: string, fields: Record<string, string>, rule: RuleInstance): Promise<{ changes: ChangeRecord[]; fields: Record<string, string>; filename: string }> =>
     post('/preview', { filename, folder, fields, rule: { type: rule.type, params: rule.params, enabled: rule.enabled } }),
+
+  previewBatch: (
+    candidates: { filename: string; folder: string; fields: Record<string, string>; cover: { mime: string; data_base64: string } | null }[],
+    rule: RuleInstance,
+  ): Promise<{ changes: ChangeRecord[]; fields: Record<string, string>; filename: string; matched_index: number | null }> =>
+    post('/preview-batch', { candidates, rule: { type: rule.type, params: rule.params, enabled: rule.enabled } }),
+
+  resolveFolder: (name: string, entries: string[], previousPath?: string | null): Promise<{ path: string | null }> =>
+    post('/resolve-folder', { name, entries, previous_path: previousPath ?? null }),
+
+  resolveFiles: (names: string[], previousPath?: string | null): Promise<{ paths: string[] }> =>
+    post('/resolve-files', { names, previous_path: previousPath ?? null }),
 
   apply: (paths: string[], ruleset: Ruleset, dryRun: boolean): Promise<ApplyResponse> =>
     post('/apply', { paths, ruleset: { name: ruleset.name, rules: ruleset.rules.map((r) => ({ type: r.type, params: r.params, enabled: r.enabled })) }, dry_run: dryRun }),

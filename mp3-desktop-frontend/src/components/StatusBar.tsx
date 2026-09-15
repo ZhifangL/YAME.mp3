@@ -11,16 +11,19 @@ export function StatusBar() {
 
   return (
     <footer className="statusbar">
-      {selected.length > 0 && (
-        <span>
-          {selected.length} selected · {formatDuration(selDur)} · {formatSize(selSize)}
-        </span>
-      )}
-      <span className="spacer" />
       <span>
-        {tracks.length} track{tracks.length === 1 ? '' : 's'} · {formatDuration(totalDur)} ·{' '}
-        {formatSize(totalSize)}
+        {selected.length > 0 ? (
+          <>
+            {selected.length} selected · {formatDuration(selDur)} · {formatSize(selSize)}
+          </>
+        ) : (
+          <>
+            {tracks.length} track{tracks.length === 1 ? '' : 's'} · {formatDuration(totalDur)} ·{' '}
+            {formatSize(totalSize)}
+          </>
+        )}
       </span>
+      <span className="spacer" />
     </footer>
   )
 }

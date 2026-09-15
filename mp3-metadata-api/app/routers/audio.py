@@ -14,10 +14,15 @@ from app.schemas import (
     ApplyRequest,
     ApplyResponse,
     CoverWriteRequest,
+    FilesResolveRequest,
+    FilesResolveResponse,
+    FolderResolveRequest,
+    FolderResolveResponse,
     MetadataResponse,
     PresetImportRequest,
     PresetModel,
     PresetUpsertRequest,
+    PreviewBatchRequest,
     PreviewRequest,
     PreviewResponse,
     RegistryResponse,
@@ -34,6 +39,7 @@ from app.services.audio_io import (
     write_cover,
     write_fields,
 )
+from app.services.fs_browser import resolve_files, resolve_folder
 from app.services.presets import delete_preset, list_presets, save_preset
 from app.services.rules import REGISTRY, RuleContext, registry_specs
 
@@ -125,19 +131,52 @@ def set_cover(request: CoverWriteRequest):
     summary="Dry-run one rule against given field values (never touches files)",
 )
 def preview(request: PreviewRequest):
-    rule_type = request.rule.type
-    cls = REGISTRY.get(rule_type)
+    return _run_preview(request.filename, request.folder, request.fields, request.cover, request.rule)
+
+
+@router.post(
+    "/api/preview-batch",
+    response_model=PreviewResponse,
+    summary="Dry-run one rule against several tracks; returns the first that changes",
+)
+def preview_batch(request: PreviewBatchRequest):
+    """Used by the rule builder: when many tracks are selected, the preview
+    should show the change on the first track that actually matches instead
+    of the first selected track (which may not change at all)."""
+    for index, candidate in enumerate(request.candidates):
+        result = _run_preview(
+            candidate.filename, candidate.folder, candidate.fields, candidate.cover, request.rule
+        )
+        if result["changes"]:
+            result["matched_index"] = index
+            return result
+    # Nothing matched: report the first candidate's context, unchanged.
+    if request.candidates:
+        candidate = request.candidates[0]
+        result = _run_preview(
+            candidate.filename, candidate.folder, candidate.fields, candidate.cover, request.rule
+        )
+        result["matched_index"] = None
+        return result
+    return {"changes": [], "fields": {}, "filename": "", "matched_index": None}
+
+
+def _run_preview(filename: str, folder: str, fields: dict, cover, rule):
+    cls = REGISTRY.get(rule.type)
     if cls is None:
-        raise HTTPException(status_code=400, detail="Unknown rule type: " + rule_type)
+        raise HTTPException(status_code=400, detail="Unknown rule type: " + rule.type)
+    ctx_fields = dict(fields or {})
+    ctx_fields["__has_cover__"] = "1" if cover and cover.data_base64 else ""
+    ctx_fields["__cover_data__"] = cover.data_base64 if cover and cover.data_base64 else ""
     ctx = RuleContext(
-        fields=request.fields,
-        filename=request.filename,
-        parent_dir=request.folder,
-        path=(request.folder.rstrip("/") + "/" + request.filename) if request.folder else request.filename,
+        fields=ctx_fields,
+        filename=filename,
+        parent_dir=folder,
+        path=(folder.rstrip("/") + "/" + filename) if folder else filename,
     )
-    changes = cls().apply(ctx, request.rule.params or {})
-    fields = {**request.fields, **{c["field"]: c["after"] for c in changes}}
-    return {"changes": changes, "fields": fields, "filename": ctx.filename}
+    changes = cls().apply(ctx, rule.params or {})
+    out_fields = {**fields, **{c["field"]: c["after"] for c in changes if not c["field"].startswith("__")}}
+    return {"changes": changes, "fields": out_fields, "filename": ctx.filename}
 
 
 @router.post(
@@ -155,6 +194,26 @@ def apply(request: ApplyRequest):
         {"name": request.ruleset.name, "rules": [r.model_dump() for r in request.ruleset.rules]},
         dry_run=request.dry_run,
     )
+
+
+@router.post(
+    "/api/resolve-folder",
+    response_model=FolderResolveResponse,
+    summary="Resolve a natively picked folder (name + relative entries) to an absolute path",
+)
+def resolve_picked_folder(request: FolderResolveRequest):
+    path = resolve_folder(request.name, request.entries, previous_path=request.previous_path)
+    return {"path": path}
+
+
+@router.post(
+    "/api/resolve-files",
+    response_model=FilesResolveResponse,
+    summary="Resolve individually picked files (exact names) to absolute paths",
+)
+def resolve_picked_files(request: FilesResolveRequest):
+    paths = resolve_files(request.names, previous_path=request.previous_path)
+    return {"paths": paths}
 
 
 @router.get("/api/presets", response_model=list[PresetModel], tags=["presets"])
