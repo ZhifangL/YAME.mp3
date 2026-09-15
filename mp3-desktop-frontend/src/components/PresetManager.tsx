@@ -3,7 +3,7 @@ import { useStore } from '../store-context'
 import type { Preset } from '../types'
 
 export function PresetManager({ onClose }: { onClose: () => void }) {
-  const { presets, deletePreset, importPresets, showToast } = useStore()
+  const { presets, deletePreset, importPresets, showToast, configDir } = useStore()
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -91,7 +91,9 @@ export function PresetManager({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <div className="preset-footer">
-          <span className="field-help">Stored in {configPathLabel()}</span>
+          <span className="field-help">
+            {configDir ? 'Stored in ' + configDir : 'Stored in the app config folder'}
+          </span>
         </div>
         <div className="modal-footer">
           <button className="text-btn" onClick={() => fileInput.current?.click()}>
@@ -140,8 +142,4 @@ function ExportOne({ preset }: { preset: Preset }) {
       ↓
     </button>
   )
-}
-
-function configPathLabel(): string {
-  return window.location.hostname === 'tauri.localhost' ? 'the app support folder' : '~/.config/tagforge/presets.json'
 }

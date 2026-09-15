@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { defaultParams } from '../rules'
 import { useStore } from '../store-context'
 import { PresetManager } from './PresetManager'
 import { RuleBuilder } from './RuleBuilder'
@@ -59,7 +60,7 @@ export function RulesSidebar() {
                 {(registry?.specs ?? []).map((spec) => (
                   <button
                     key={spec.type}
-                    onClick={() => setDraft({ ruleId: null, type: spec.type, params: defaultsFor(spec) })}
+                    onClick={() => setDraft({ ruleId: null, type: spec.type, params: defaultParams(spec.params) })}
                     title={spec.description}
                   >
                     {spec.label}
@@ -125,16 +126,4 @@ export function RulesSidebar() {
       {saveOpen && <SavePresetModal onClose={() => setSaveOpen(false)} />}
     </aside>
   )
-}
-
-function defaultsFor(spec: { type: string; params: { name: string; kind: string; default?: unknown; choices?: { key: string }[] }[] }): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const p of spec.params) {
-    if (p.kind === 'parse_pattern') out[p.name] = '* - *'
-    else if (p.kind === 'parse_assignments') out[p.name] = {}
-    else if (p.kind === 'image') out[p.name] = null
-    else if (p.kind === 'bool') out[p.name] = p.default ?? true
-    else out[p.name] = p.default ?? (p.kind === 'choice' && p.choices?.length ? p.choices[0].key : '')
-  }
-  return out
 }

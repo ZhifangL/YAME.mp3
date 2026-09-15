@@ -1,4 +1,4 @@
-// Small formatting helpers.
+// Small formatting + DOM helpers shared across components.
 
 export function formatDuration(seconds: number | null): string {
   if (seconds == null || !isFinite(seconds)) return '–:––'
@@ -27,4 +27,46 @@ export function yearOf(track: { fields: Record<string, string> }): string {
   const date = track.fields.date ?? ''
   const m = date.match(/\d{4}/)
   return m ? m[0] : ''
+}
+
+/** Directory part of a path ('' when the path has no separator). */
+export function dirOf(path: string): string {
+  const idx = path.lastIndexOf('/')
+  return idx === -1 ? '' : path.slice(0, idx)
+}
+
+/** File name part of a path. */
+export function baseName(path: string): string {
+  const idx = path.lastIndexOf('/')
+  return idx === -1 ? path : path.slice(idx + 1)
+}
+
+/** Join a directory and a file name with exactly one separator. */
+export function joinPath(dir: string, name: string): string {
+  return dir ? dir.replace(/\/+$/, '') + '/' + name : name
+}
+
+export interface ImagePayload {
+  mime: string
+  data_base64: string
+  name: string
+}
+
+/** Read an image File into the {mime, data_base64} shape the engine expects. */
+export function readImageFile(file: File): Promise<ImagePayload> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = String(reader.result)
+      const comma = dataUrl.indexOf(',')
+      const mime = dataUrl.slice(5, dataUrl.indexOf(';'))
+      resolve({
+        mime: mime || file.type || 'image/jpeg',
+        data_base64: dataUrl.slice(comma + 1),
+        name: file.name,
+      })
+    }
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
 }

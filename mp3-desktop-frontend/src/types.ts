@@ -81,6 +81,8 @@ export interface RuleField {
 export interface RegistryResponse {
   specs: RuleSpec[]
   fields: RuleField[]
+  /** Lowercase, dot-prefixed extensions the engine can read (".mp3"). */
+  audio_suffixes: string[]
 }
 
 export interface RuleInstance {

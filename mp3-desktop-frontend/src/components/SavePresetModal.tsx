@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store-context'
 
 export function SavePresetModal({ onClose }: { onClose: () => void }) {
-  const { ruleset, presets, activePresetId, savePreset, showToast } = useStore()
+  const { ruleset, presets, activePresetId, savePreset, showToast, configDir } = useStore()
   const [name, setName] = useState(ruleset.name)
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -56,8 +56,9 @@ export function SavePresetModal({ onClose }: { onClose: () => void }) {
             spellCheck={false}
           />
           <span className="field-help">
-            {ruleset.rules.length} rule{ruleset.rules.length === 1 ? '' : 's'} will be saved. Presets live in
-            ~/.config/tagforge and can be exported from “Manage rulesets”.
+            {ruleset.rules.length} rule{ruleset.rules.length === 1 ? '' : 's'} will be saved.
+            {configDir ? ' Presets live in ' + configDir + ' and can be' : ' Presets can be'} exported
+            from “Manage rulesets”.
           </span>
         </div>
         <div className="modal-footer">

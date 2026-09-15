@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store-context'
-import { formatDate, formatDuration, formatSize } from '../utils'
+import { formatDate, formatDuration, formatSize, readImageFile } from '../utils'
 import { MusicArt } from './MusicArt'
 
 interface DraftFields {
@@ -131,11 +131,9 @@ export function EditTrackOverlay() {
       showToast('Cover image is larger than 10 MB', 'error')
       return
     }
-    const dataUrl = await readAsDataUrl(file)
-    const mime = dataUrl.slice(5, dataUrl.indexOf(';'))
-    const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+    const image = await readImageFile(file)
     try {
-      await setCover(track.file.path, mime, b64)
+      await setCover(track.file.path, image.mime, image.data_base64)
       setCoverMenuOpen(false)
       showToast('Cover art updated', 'success')
     } catch (err) {
@@ -363,13 +361,4 @@ function ReadonlyRow({ label, value }: { label: string; value: string }) {
 
 function formatBitrate(kbps: number): string {
   return kbps >= 1000 ? (kbps / 1000).toFixed(1) + ' Mbps' : kbps + ' kbps'
-}
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
 }

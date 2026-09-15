@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { parseAssignments, previewSummary, specFor } from '../rules'
 import { useStore } from '../store-context'
-import type { RegistryResponse, RuleParamSpec, Track } from '../types'
+import type { ChangeRecord, RegistryResponse, RuleParamSpec, Track } from '../types'
+import { dirOf, readImageFile } from '../utils'
 
 const SAMPLE_TRACK = {
   filename: 'Ado - Odo (128kbit_AAC).mp3',
@@ -132,15 +133,14 @@ export function RuleBuilder() {
   )
 }
 
-function formatPreview(res: { changes: { field: string; before: string; after: string }[]; filename: string }): string {
+function formatPreview(res: { changes: ChangeRecord[]; filename: string }): string {
   const cover = res.changes.find((c) => c.field === '__cover__')
   if (cover) {
     return cover.after === 'remove' ? 'Cover art: remove existing artwork' : 'Cover art: ' + cover.after
   }
-  return previewSummary(
-    res.changes.map((c) => ({ ...c, label: c.field, rule_type: null, rule_label: null })),
-    res.filename,
-  )
+  // The engine already labels each change ("Title", "Cover Art", ...);
+  // previewSummary would otherwise have to guess from the raw field key.
+  return previewSummary(res.changes, res.filename)
 }
 
 function validateDraft(registry: RegistryResponse, params: RuleParamSpec[], values: Record<string, unknown>): boolean {
@@ -264,10 +264,8 @@ function ImageParamEditor({ value }: { value: { mime?: string; data_base64?: str
 
   const onPick = async (file: File) => {
     if (file.size > 10 * 1024 * 1024) return
-    const dataUrl = await readAsDataUrl(file)
-    const mime = dataUrl.slice(5, dataUrl.indexOf(';'))
-    const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
-    updateDraftParam('image', { mime, data_base64: b64, name: file.name })
+    const image = await readImageFile(file)
+    updateDraftParam('image', image)
   }
 
   return (
@@ -373,18 +371,4 @@ function ParsePatternEditor({ pattern }: { pattern: string }) {
       </label>
     </div>
   )
-}
-
-function dirOf(path: string): string {
-  const idx = path.lastIndexOf('/')
-  return idx === -1 ? '' : path.slice(0, idx)
-}
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
 }

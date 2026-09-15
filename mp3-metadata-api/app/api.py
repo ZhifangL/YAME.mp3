@@ -5,12 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import audio, filesystem
+from app.services.presets import config_dir
 
 API_TITLE = "TagForge Engine"
 API_VERSION = "0.2.0"
 
 
-def create_app() -> FastAPI:
+def create_app(lifespan=None) -> FastAPI:
     app = FastAPI(
         title=API_TITLE,
         version=API_VERSION,
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
             "(React frontend talks to it over localhost; in the packaged "
             "Tauri build it runs as a Python sidecar)."
         ),
+        lifespan=lifespan,
     )
 
     # Dev-mode CORS: the Vite dev server (e.g. http://localhost:5173) and the
@@ -56,6 +58,16 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health", tags=["system"])
     async def health() -> dict:
-        return {"status": "ok"}
+        """Liveness + the paths the UI should not have to guess at.
+
+        ``config_dir`` is where presets and the port file live; the UI shows
+        it to the user, and the packaged build points it at the per-user
+        app-support folder via TAGFORGE_CONFIG_DIR.
+        """
+        return {
+            "status": "ok",
+            "version": API_VERSION,
+            "config_dir": str(config_dir()),
+        }
 
     return app

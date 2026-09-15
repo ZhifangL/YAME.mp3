@@ -4,6 +4,7 @@ import { api } from './api'
 import { defaultParams } from './rules'
 import { StoreContext, type BuilderDraft, type SortKey, type Store, type ToastState } from './store-context'
 import type { ApplyResponse, Preset, RegistryResponse, RuleInstance, Ruleset, Track } from './types'
+import { dirOf, joinPath } from './utils'
 
 let toastCounter = 0
 
@@ -14,6 +15,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [folderPath, setFolderPath] = useState<string | null>(null)
   const [loadingTracks, setLoadingTracks] = useState(false)
   const [engineError, setEngineError] = useState<string | null>(null)
+  const [configDir, setConfigDir] = useState<string | null>(null)
 
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [search, setSearch] = useState('')
@@ -54,6 +56,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then(setPresets)
       .catch(() => {
         /* presets are optional at startup */
+      })
+    api
+      .health()
+      .then((res) => setConfigDir(res.config_dir))
+      .catch(() => {
+        /* the config path is only used for display */
       })
   }, [])
 
@@ -106,7 +114,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast('Could not open the folder', 'error')
         finish()
       })
-  }, [showToast])
+  }, [showToast, resetSort])
 
   // Dev convenience: ?folder=/abs/path auto-loads a folder on startup.
   useEffect(() => {
@@ -148,7 +156,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast],
+    [showToast, resetSort],
   )
 
   // Add tracks from subsequently picked folders/files without dropping the
@@ -182,17 +190,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [showToast],
   )
 
-  const reloadTrack = useCallback(
-    async (path: string) => {
-      const res = await api.readTracks([path])
-      if (res.tracks.length) {
-        const track = res.tracks[0]
-        setTracks((current) => current.map((t) => (t.file.path === path ? track : t)))
-      }
-    },
-    [],
-  )
-
   const upsertTrack = useCallback((track: Track) => {
     setTracks((current) => {
       const idx = current.findIndex((t) => t.file.path === track.file.path)
@@ -209,13 +206,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEditTrackPath((current) => (current === path ? null : current))
   }, [])
 
-  const clearTracks = useCallback(() => {
-    setTracks([])
-    setFolderPath(null)
-    setSelectedPaths([])
-    setEditTrackPath(null)
-  }, [])
-
   const toggleSelect = useCallback((path: string, additive: boolean) => {
     setSelectedPaths((current) => {
       if (additive) {
@@ -223,10 +213,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       return current.includes(path) && current.length === 1 ? [] : [path]
     })
-  }, [])
-
-  const selectOnly = useCallback((path: string) => {
-    setSelectedPaths([path])
   }, [])
 
   const selectRange = useCallback((paths: string[]) => {
@@ -466,7 +452,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // renamed). Unchanged files keep their current row.
       const newPaths = result.results
         .filter((r) => r.written)
-        .map((r) => r.new_filename !== r.filename && r.new_filename ? dirOf(r.path) + '/' + r.new_filename : r.path)
+        .map((r) => r.new_filename !== r.filename && r.new_filename ? joinPath(dirOf(r.path), r.new_filename) : r.path)
       if (newPaths.length) {
         const res = await api.readTracks(newPaths)
         if (res.tracks.length) {
@@ -483,7 +469,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 (rr) => rr.path === t.file.path && rr.written && rr.new_filename !== rr.filename,
               )
               if (renamed) {
-                const newPath = dirOf(renamed.path) + '/' + renamed.new_filename
+                const newPath = joinPath(dirOf(renamed.path), renamed.new_filename)
                 const moved = fresh.get(newPath)
                 if (moved) {
                   out.push(moved)
@@ -574,6 +560,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       folderPath,
       loadingTracks,
       engineError,
+      configDir,
       selectedPaths,
       search,
       sortKey,
@@ -588,12 +575,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       loadFolder,
       appendPaths,
       replacePaths,
-      reloadTrack,
       upsertTrack,
       removeTrack,
-      clearTracks,
       toggleSelect,
-      selectOnly,
       selectRange,
       clearSelection,
       setSearch,
@@ -623,11 +607,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast,
     }),
     [
-      registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError,
+      registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError, configDir,
       selectedPaths, search, sortKey, sortDir, ruleset, draft, editTrackPath,
       applyReview, applying, toast,
-      init, loadFolder, appendPaths, replacePaths, reloadTrack, upsertTrack, removeTrack, clearTracks,
-      toggleSelect, selectOnly, selectRange, clearSelection, setSearch, cycleSort,
+      init, loadFolder, appendPaths, replacePaths, upsertTrack, removeTrack,
+      toggleSelect, selectRange, clearSelection, setSearch, cycleSort,
       setDraft, updateDraftParam, updateDraftType, cancelDraft, addRule, commitDraft,
       removeRule, toggleRule, reorderRules, setName, openEdit,
       closeEdit, writeFields, setCover, removeCover,
@@ -637,9 +621,4 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
-}
-
-function dirOf(path: string): string {
-  const idx = path.lastIndexOf('/')
-  return idx === -1 ? '' : path.slice(0, idx)
 }

@@ -45,6 +45,8 @@ export interface Store {
   folderPath: string | null
   loadingTracks: boolean
   engineError: string | null
+  /** Where the engine keeps presets + the port file (display only). */
+  configDir: string | null
 
   selectedPaths: string[]
   search: string
@@ -63,13 +65,10 @@ export interface Store {
   loadFolder: (folderPath: string, paths?: string[]) => void
   appendPaths: (paths: string[]) => Promise<void>
   replacePaths: (paths: string[]) => Promise<void>
-  reloadTrack: (path: string) => Promise<void>
   upsertTrack: (track: Track) => void
   removeTrack: (path: string) => void
-  clearTracks: () => void
 
   toggleSelect: (path: string, additive: boolean) => void
-  selectOnly: (path: string) => void
   selectRange: (paths: string[]) => void
   clearSelection: () => void
   setSearch: (value: string) => void

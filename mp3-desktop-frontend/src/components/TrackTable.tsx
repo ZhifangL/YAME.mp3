@@ -112,6 +112,7 @@ export function TrackTable() {
     search,
     sortKey,
     sortDir,
+    registry,
     toggleSelect,
     selectRange,
     clearSelection,
@@ -417,6 +418,7 @@ export function TrackTable() {
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
+    const suffixes = new Set(registry?.audio_suffixes?.length ? registry.audio_suffixes : FALLBACK_AUDIO_EXTENSIONS)
     const items = Array.from(e.dataTransfer?.items ?? [])
     const names: string[] = []
     let folderPick: { name: string; entries: string[] } | null = null
@@ -427,7 +429,7 @@ export function TrackTable() {
         if (!folderPick) folderPick = await readDirEntries(entry as FileSystemDirectoryEntry)
       } else {
         const file = item.getAsFile()
-        if (file && isAudioFile(file.name)) names.push(file.name)
+        if (file && isAudioFile(file.name, suffixes)) names.push(file.name)
       }
     }
     if (folderPick) {
@@ -694,11 +696,9 @@ function cellText(col: Column, track: Track): string {
 }
 
 function cellMutedClass(col: Column, track: Track): string {
-  if (col.key === 'filename' || col.key === 'title') {
-    const v = String(col.value(track) || '')
-    return v ? '' : ' muted'
-  }
-  return ' muted'
+  // Only *empty* cells are muted — populated ones keep full contrast, so the
+  // table reads as data rather than as a wall of grey.
+  return String(col.value(track) || '') ? '' : ' muted'
 }
 
 function SortableHeader({
@@ -761,12 +761,12 @@ function SortableHeader({
   )
 }
 
-const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.m4b', '.aac', '.mp4', '.flac', '.ogg', '.oga', '.opus', '.wav', '.wave', '.aiff', '.aif', '.wma', '.asf', '.mpc', '.ape', '.wv', '.tta'])
+const FALLBACK_AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.m4b', '.aac', '.mp4', '.flac', '.ogg', '.oga', '.opus', '.wav', '.wave', '.aiff', '.aif', '.wma', '.asf', '.mpc', '.ape', '.wv', '.tta'])
 
-function isAudioFile(name: string): boolean {
+function isAudioFile(name: string, suffixes: Set<string>): boolean {
   const dot = name.lastIndexOf('.')
   if (dot === -1) return false
-  return AUDIO_EXTENSIONS.has(name.slice(dot).toLowerCase())
+  return suffixes.has(name.slice(dot).toLowerCase())
 }
 
 async function readDirEntries(dir: FileSystemDirectoryEntry): Promise<{ name: string; entries: string[] }> {

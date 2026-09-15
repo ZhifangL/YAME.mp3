@@ -48,12 +48,6 @@ class AudioInfo(BaseModel):
     bitrate_mode: Optional[str] = None
 
 
-class TagFrame(BaseModel):
-    id: str
-    description: str = ""
-    values: list[str] = []
-
-
 class CoverInfo(BaseModel):
     mime: str
     data_base64: str
@@ -63,7 +57,6 @@ class MetadataResponse(BaseModel):
     file: FileInfo
     audio: AudioInfo = AudioInfo()
     fields: dict[str, str] = {}
-    frames: list[TagFrame] = []
     cover: Optional[CoverInfo] = None
     writable: bool = True
     warnings: list[str] = []
@@ -91,6 +84,7 @@ class RuleSpec(BaseModel):
 class RegistryResponse(BaseModel):
     specs: list[RuleSpec] = []
     fields: list[dict] = []  # {key, label, kind, pseudo, writable}
+    audio_suffixes: list[str] = []  # lowercase, dot-prefixed (".mp3")
 
 
 class RuleInstance(BaseModel):
@@ -161,8 +155,21 @@ class TracksReadRequest(BaseModel):
     paths: list[str] = []
 
 
+class ReadError(BaseModel):
+    path: str
+    error: str
+
+
 class TracksReadResponse(BaseModel):
+    """Read results for many files.
+
+    ``errors`` must stay in the response model: FastAPI strips any field that
+    is not declared here, which would silently hide unreadable files from the
+    UI's "N file(s) could not be read" warning.
+    """
+
     tracks: list[MetadataResponse] = []
+    errors: list[ReadError] = []
 
 
 class TrackWriteRequest(BaseModel):

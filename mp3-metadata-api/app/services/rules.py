@@ -1,9 +1,13 @@
-"""Rule engine: CLEAR, REPLACE, WRITE, APPEND, COPY FROM, PARSE FILENAME, CHANGE CASE.
+"""Rule engine: CLEAR, REPLACE, WRITE, APPEND, COPY FROM, PARSE FILENAME,
+CHANGE CASE, SET COVER, REMOVE COVER.
 
-Rules are declarative, self-describing classes registered in REGISTRY.
-Adding a new rule type means subclassing Rule, implementing apply() and
-registering it: the API exposes the registry to the UI, which renders rule
-editors dynamically, so new rules need no frontend work.
+Rules are declarative and self-describing: each class declares its parameter
+schema, the API serves that schema from REGISTRY, and the UI renders the
+editor from it, so a new rule type needs no frontend work.
+
+The user-facing one-line summary of a rule ("Replace " - " with " – " in
+Title") is built in the frontend from that same schema (see src/rules.ts);
+this module deliberately holds no second copy of those strings.
 
 Wildcard syntax: * matches any run of characters, ? matches exactly one.
 In REPLACE the "find" pattern supports wildcards and the replacement
@@ -18,6 +22,7 @@ from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Optional
 
 from app.fields import RULE_FIELD_KEYS, field_label
+
 
 # ------------------------------------------------------------------ wildcards
 
@@ -65,6 +70,7 @@ def substitute_backrefs(template: str, match: "re.Match") -> str:
 
 
 # ------------------------------------------------------------------ context
+
 
 class RuleContext:
     """Working set of field values for one file during a ruleset run."""
@@ -115,6 +121,7 @@ class RuleContext:
 
 # ------------------------------------------------------------------ rules
 
+
 class Rule(ABC):
     type: ClassVar[str] = ""
     label: ClassVar[str] = ""
@@ -129,10 +136,6 @@ class Rule(ABC):
         Returns a change record for every field whose value actually
         changed: {"field": key, "label": str, "before": str, "after": str}.
         """
-
-    @classmethod
-    def describe(cls, params: dict[str, Any]) -> str:
-        return cls.label
 
     @staticmethod
     def _changed(key: str, before: str, after: str) -> Optional[dict]:
@@ -168,10 +171,6 @@ class ClearRule(Rule):
         change = self._changed(key, before, "")
         return [change] if change else []
 
-    @classmethod
-    def describe(cls, params):
-        return "Clear " + field_label(params.get("field") or "")
-
 
 class ReplaceRule(Rule):
     type = "REPLACE"
@@ -199,10 +198,6 @@ class ReplaceRule(Rule):
         change = self._changed(key, before, after)
         return [change] if change else []
 
-    @classmethod
-    def describe(cls, params):
-        return 'Replace "' + str(params.get("find", "")) + '" with "' + str(params.get("replace", "")) + '" in ' + field_label(params.get("field") or "")
-
 
 class WriteRule(Rule):
     type = "WRITE"
@@ -222,10 +217,6 @@ class WriteRule(Rule):
         ctx.set(key, value)
         change = self._changed(key, before, value)
         return [change] if change else []
-
-    @classmethod
-    def describe(cls, params):
-        return 'Write "' + str(params.get("value", "")) + '" to ' + field_label(params.get("field") or "")
 
 
 class AppendRule(Rule):
@@ -250,10 +241,6 @@ class AppendRule(Rule):
         change = self._changed(key, before, after)
         return [change] if change else []
 
-    @classmethod
-    def describe(cls, params):
-        return 'Append "' + str(params.get("value", "")) + '" to ' + field_label(params.get("field") or "")
-
 
 class CopyFromRule(Rule):
     type = "COPY FROM"
@@ -274,10 +261,6 @@ class CopyFromRule(Rule):
         ctx.set(key, value)
         change = self._changed(key, before, value)
         return [change] if change else []
-
-    @classmethod
-    def describe(cls, params):
-        return "Copy " + field_label(params.get("source") or "") + " → " + field_label(params.get("field") or "")
 
 
 class ParseFilenameRule(Rule):
@@ -318,11 +301,6 @@ class ParseFilenameRule(Rule):
                 changes.append(change)
         return changes
 
-    @classmethod
-    def describe(cls, params):
-        pattern = str(params.get("pattern") or "")
-        return 'Parse file name with "' + pattern + '"'
-
 
 class SetCoverRule(Rule):
     """Set the same embedded cover art on every file (batch album art).
@@ -361,19 +339,6 @@ class SetCoverRule(Rule):
         after = name or (mime.split("/")[-1] + " image")
         return [{"field": "__cover__", "label": "Cover Art", "before": before,
                  "after": after, "_mime": mime, "_data_base64": image_data}]
-
-    @classmethod
-    def describe(cls, params):
-        mode = str(params.get("mode") or "set")
-        if mode == "remove":
-            return "Remove cover art"
-        image = params.get("image")
-        if isinstance(image, dict) and image.get("data_base64"):
-            name = str(image.get("name") or "")
-            if name:
-                return "Set cover art (" + name + ")"
-            return "Set cover art (" + str(image.get("mime") or "image").split("/")[-1] + ")"
-        return "Set cover art"
 
 
 class ChangeCaseRule(Rule):
@@ -458,11 +423,6 @@ class ChangeCaseRule(Rule):
         change = self._changed(key, before, after)
         return [change] if change else []
 
-    @classmethod
-    def describe(cls, params):
-        mode = str(params.get("mode") or "title")
-        return "Change " + field_label(params.get("field") or "") + " to " + mode
-
 
 REGISTRY: dict[str, type[Rule]] = {}
 
@@ -470,6 +430,7 @@ REGISTRY: dict[str, type[Rule]] = {}
 def register(cls: type[Rule]) -> type[Rule]:
     REGISTRY[cls.type] = cls
     return cls
+
 
 class RemoveCoverRule(Rule):
     """Delete embedded artwork from every file (no parameters)."""
@@ -482,10 +443,8 @@ class RemoveCoverRule(Rule):
     def apply(self, ctx, params):
         return _clear_cover_state(ctx)
 
-    @classmethod
-    def describe(cls, params):
-        return "Remove cover art"
 
+# Registration order drives the order of the rule menu in the UI.
 register(ClearRule)
 register(ReplaceRule)
 register(WriteRule)
@@ -495,6 +454,7 @@ register(ParseFilenameRule)
 register(ChangeCaseRule)
 register(SetCoverRule)
 register(RemoveCoverRule)
+
 
 def registry_specs() -> list[dict]:
     """Self-describing rule catalog for the UI (kept in definition order)."""
@@ -514,6 +474,7 @@ def get_rule(type_name: str) -> Optional[type[Rule]]:
 
 
 # ------------------------------------------------------------------ ruleset runner
+
 
 def run_ruleset(ctx: RuleContext, rules: list[dict]) -> tuple[dict[str, str], list[dict]]:
     """Run a list of rule instances (each {type, params, enabled}) over ctx.

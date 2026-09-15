@@ -1,6 +1,7 @@
-// Thin client for the TagForge engine (FastAPI on 127.0.0.1:8000).
-// Vite proxies /api to the engine during dev; the Tauri build talks to the
-// sidecar directly.
+// Thin client for the TagForge engine (FastAPI on 127.0.0.1).
+// Vite proxies /api to the engine during dev; the packaged Tauri build talks
+// to the sidecar directly, so the base URL is resolved at call time.
+import { apiBase } from './env'
 import type {
   ApplyResponse,
   BrowseResponse,
@@ -12,14 +13,19 @@ import type {
   Track,
 } from './types'
 
-const BASE = '/api'
+export interface HealthResponse {
+  status: string
+  version: string
+  /** Where presets and the port file live (shown in the UI). */
+  config_dir: string
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
   try {
-    res = await fetch(BASE + path, init)
+    res = await fetch(apiBase() + path, init)
   } catch (err) {
-    throw new Error('Cannot reach the TagForge engine at 127.0.0.1:8000. Is it running?', { cause: err })
+    throw new Error('Cannot reach the TagForge engine. Is it running?', { cause: err })
   }
   if (!res.ok) {
     let detail = res.status + ' ' + res.statusText
@@ -43,6 +49,8 @@ function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const api = {
+  health: (): Promise<HealthResponse> => request<HealthResponse>('/health'),
+
   browse: (path?: string, recursive = false): Promise<BrowseResponse> =>
     request<BrowseResponse>(
       '/browse' + (path ? '?path=' + encodeURIComponent(path) : '') + (recursive ? (path ? '&' : '?') + 'recursive=true' : ''),

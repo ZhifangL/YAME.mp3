@@ -42,6 +42,13 @@
   -webkit-app-region: drag;
 }
 
+/* Packaged app: the window is drawn by macOS, so the native traffic lights
+   sit inside this bar and the wordmark has to clear them. `applyHostClass()`
+   adds .host-tauri to <html> only inside the Tauri webview. */
+.host-tauri .titlebar {
+  padding-left: 84px;
+}
+
 .wordmark {
   display: flex;
   align-items: center;

@@ -11,6 +11,7 @@ One canonical value model: every field is a string, "" means absent.
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -26,7 +27,7 @@ import mutagen.oggvorbis
 import mutagen.wave
 from mutagen.id3 import APIC, COMM, Frames, ID3, USLT
 
-from app.fields import FIELD_BY_KEY, FIELDS
+from app.fields import FIELD_BY_KEY, FIELDS, field_label
 
 ID3_ENCODING = 3  # UTF-8
 
@@ -70,6 +71,70 @@ ASF_FIELD_KEYS = {
 
 class MetadataError(ValueError):
     """Raised for files that cannot be read as audio."""
+
+
+@dataclass
+class WriteOutcome:
+    """Where a write left the file, plus anything the user should know.
+
+    ``path`` is the file's location *after* the write, so callers never have
+    to guess whether a rename was applied or refused.
+    """
+
+    path: str
+    warnings: list[str] = field(default_factory=list)
+    renamed: bool = False
+
+
+def _load(path: Path):
+    """Parse *path* with mutagen, translating its errors into ours.
+
+    mutagen raises ``MutagenError`` (a plain ``Exception``) for missing and
+    unreadable files alike; callers need a ``FileNotFoundError``/``MetadataError``
+    split so the API can answer 404 vs 422, and so a single bad file can never
+    escape as a 500 in the middle of a batch.
+    """
+    if not path.exists():
+        raise FileNotFoundError("File does not exist: " + str(path))
+    if not path.is_file():
+        raise FileNotFoundError("Not a file: " + str(path))
+    try:
+        fileobj = mutagen.File(str(path))
+    except Exception as exc:
+        raise MetadataError("Could not parse audio stream: " + str(exc)) from exc
+    if fileobj is None:
+        raise MetadataError(path.name + " is not a readable audio file.")
+    return fileobj
+
+
+def _target_name(file_path: Path, requested: str) -> str:
+    """File name to use for a requested rename, preserving a usable extension.
+
+    A name that already ends in a known audio suffix is respected verbatim
+    (the user may be deliberately changing the container extension). Anything
+    else keeps the original file's suffix -- including names that merely
+    *contain* a dot, such as "Mr. Brightside", which would otherwise be written
+    with no extension at all and then vanish from folder listings.
+    """
+    name = requested.strip().rstrip(".")
+    if not name:
+        return file_path.name
+    if Path(name).suffix.lower() in AUDIO_SUFFIXES:
+        return name
+    return name + file_path.suffix
+
+
+def _unsafe_name_reason(name: str) -> Optional[str]:
+    """Why *name* may not be used as a file name, or None when it is fine.
+
+    Tag values routinely contain "/" (think "AC/DC"), and a rule that copies
+    one into the File Name field must never move the file out of its folder.
+    """
+    if not name or name in (".", ".."):
+        return "it is not a valid file name"
+    if "/" in name or "\\" in name or "\0" in name:
+        return "file names cannot contain path separators"
+    return None
 
 
 # ------------------------------------------------------------------ adapters
@@ -125,23 +190,6 @@ class Id3Adapter:
         except TypeError:
             return
         self.id3.add(frame)
-
-    def frames(self) -> list[dict]:
-        out: list[dict] = []
-        for key, frame in self.id3.items():
-            values: list[str] = []
-            if isinstance(frame, APIC):
-                values = [getattr(frame, "mime", "image") + " (cover)"]
-            elif isinstance(frame, (COMM, USLT)):
-                text = getattr(frame, "text", None)
-                if isinstance(text, (list, tuple)):
-                    values = [str(t) for t in text]
-                elif text:
-                    values = [str(text)]
-            else:
-                values = [str(t) for t in (getattr(frame, "text", None) or [])]
-            out.append({"id": key, "description": "", "values": values})
-        return out
 
     def cover(self) -> Optional[tuple[str, bytes]]:
         for frame in self.id3.getall("APIC"):
@@ -553,28 +601,13 @@ def read_track(path: str) -> dict:
         MetadataError: the file cannot be parsed as audio.
     """
     file_path = Path(path).expanduser()
-    if not file_path.exists():
-        raise FileNotFoundError("File does not exist: " + str(file_path))
-    if not file_path.is_dir() is False and not file_path.is_file():
-        raise FileNotFoundError("Not a file: " + str(file_path))
-
     warnings: list[str] = []
-    try:
-        fileobj = mutagen.File(str(file_path))
-    except Exception as exc:
-        raise MetadataError("Could not parse audio stream: " + str(exc)) from exc
-    if fileobj is None:
-        raise MetadataError(file_path.name + " is not a readable audio file.")
+    fileobj = _load(file_path)
 
     adapter, save_kind = _detect(fileobj)
     fields: dict[str, str] = {}
-    for field in FIELDS:
-        value = adapter.get(field) if adapter is not None else ""
-        fields[field.key] = value
-
-    frames: list[dict] = []
-    if isinstance(adapter, Id3Adapter):
-        frames = adapter.frames()
+    for f in FIELDS:
+        fields[f.key] = adapter.get(f) if adapter is not None else ""
 
     cover_info: Optional[dict] = None
     if adapter is not None:
@@ -595,43 +628,42 @@ def read_track(path: str) -> dict:
         },
         "audio": _audio_info(fileobj, warnings),
         "fields": fields,
-        "frames": frames,
         "cover": cover_info,
         "writable": save_kind in ("id3", "mp4", "vorbis", "ape"),
         "warnings": warnings,
     }
 
 
-def write_fields(path: str, fields: dict[str, str], rename_to: Optional[str] = None) -> list[str]:
+def write_fields(path: str, fields: dict[str, str], rename_to: Optional[str] = None) -> WriteOutcome:
     """Write canonical field values to one file; "" deletes the tag.
 
     Unknown keys are ignored. "rename_to", when given and different from the
-    current name, renames the file on disk (extension is kept when the new
-    name has none). Returns a list of warnings.
+    current name, renames the file on disk. A name that already carries a known
+    audio extension is used verbatim; otherwise the original extension is kept,
+    so "Mr. Brightside" becomes "Mr. Brightside.mp3" rather than an extensionless
+    file that folder listings would no longer find.
+
+    Returns a WriteOutcome whose ``path`` is where the file actually ended up --
+    a refused rename (target already exists, empty name, OS error) leaves it at
+    the original path with a warning, and the caller gets no wrong answers.
     """
     file_path = Path(path).expanduser()
     warnings: list[str] = []
-
-    try:
-        fileobj = mutagen.File(str(file_path))
-    except Exception as exc:
-        raise MetadataError("Could not parse audio stream: " + str(exc)) from exc
-    if fileobj is None:
-        raise MetadataError(file_path.name + " is not a readable audio file.")
+    fileobj = _load(file_path)
 
     adapter, save_kind = _detect(fileobj)
-    if save_kind not in ("id3", "mp4", "vorbis", "ape"):
+    if fields and save_kind not in ("id3", "mp4", "vorbis", "ape"):
         warnings.append("Format is read-only; tags were not written.")
 
     if adapter is not None:
         for key, value in (fields or {}).items():
-            field = FIELD_BY_KEY.get(key)
-            if field is None:
+            f = FIELD_BY_KEY.get(key)
+            if f is None:
                 continue
             try:
-                adapter.set(field, value or "")
+                adapter.set(f, value or "")
             except Exception as exc:
-                warnings.append("Could not write " + field.label + ": " + str(exc))
+                warnings.append("Could not write " + f.label + ": " + str(exc))
 
     if save_kind in ("id3", "mp4", "vorbis", "ape") and fields:
         try:
@@ -639,23 +671,23 @@ def write_fields(path: str, fields: dict[str, str], rename_to: Optional[str] = N
         except Exception as exc:
             warnings.append("Could not save tags: " + str(exc))
 
-    if rename_to and rename_to != file_path.name:
-        new_name = rename_to.strip()
-        if not new_name:
-            warnings.append("Refusing to rename to an empty file name.")
+    final_path = file_path
+    if rename_to and rename_to.strip() != file_path.name:
+        new_name = _target_name(file_path, rename_to)
+        reason = _unsafe_name_reason(new_name)
+        target = file_path.parent / new_name
+        if reason is not None:
+            warnings.append("Rename skipped: " + reason + ".")
+        elif target.exists() and target != file_path:
+            warnings.append("Rename skipped: " + new_name + " already exists.")
         else:
-            if "." not in new_name:
-                new_name += file_path.suffix
-            target = file_path.parent / new_name
-            if target.exists() and target != file_path:
-                warnings.append("Rename skipped: " + new_name + " already exists.")
-            else:
-                try:
-                    file_path.rename(target)
-                except OSError as exc:
-                    warnings.append("Rename failed: " + str(exc))
+            try:
+                file_path.rename(target)
+                final_path = target
+            except OSError as exc:
+                warnings.append("Rename failed: " + str(exc))
 
-    return warnings
+    return WriteOutcome(path=str(final_path), warnings=warnings, renamed=final_path != file_path)
 
 
 def write_cover(path: str, mime: str, data_base64: str) -> list[str]:
@@ -668,9 +700,7 @@ def write_cover(path: str, mime: str, data_base64: str) -> list[str]:
         raise MetadataError("Cover image is larger than 10 MB.")
 
     file_path = Path(path).expanduser()
-    fileobj = mutagen.File(str(file_path))
-    if fileobj is None:
-        raise MetadataError(file_path.name + " is not a readable audio file.")
+    fileobj = _load(file_path)
     adapter, save_kind = _detect(fileobj)
     warnings: list[str] = []
     if adapter is None or not hasattr(adapter, "set_cover"):
@@ -687,9 +717,7 @@ def write_cover(path: str, mime: str, data_base64: str) -> list[str]:
 def remove_cover(path: str) -> list[str]:
     """Delete the embedded cover art of one file."""
     file_path = Path(path).expanduser()
-    fileobj = mutagen.File(str(file_path))
-    if fileobj is None:
-        raise MetadataError(file_path.name + " is not a readable audio file.")
+    fileobj = _load(file_path)
     adapter, save_kind = _detect(fileobj)
     warnings: list[str] = []
     if adapter is None or not hasattr(adapter, "remove_cover"):
@@ -710,101 +738,12 @@ def apply_ruleset(paths: list[str], ruleset: dict, dry_run: bool) -> dict:
     results: list[dict] = []
     for path in paths:
         try:
-            md = read_track(path)
-        except (FileNotFoundError, MetadataError) as exc:
+            results.append(_apply_to_file(path, ruleset, dry_run))
+        except Exception as exc:  # noqa: BLE001 - one bad file must not sink the batch
             results.append({
                 "path": path, "filename": Path(path).name, "error": str(exc),
                 "changes": [], "warnings": [], "written": False,
             })
-            continue
-
-        filename = md["file"]["filename"]
-        parent_dir = str(Path(path).parent)
-        rule_fields = dict(md["fields"])
-        original_cover = md.get("cover")
-        original_data = (original_cover or {}).get("data_base64", "") or ""
-        original_mime = (original_cover or {}).get("mime") or "image/jpeg"
-        rule_fields["__has_cover__"] = "1" if original_data else ""
-        rule_fields["__cover_data__"] = original_data
-        rule_fields["__cover_mime__"] = original_mime
-        ctx = RuleContext(fields=rule_fields, filename=filename, parent_dir=parent_dir, path=path)
-        final_fields, _rule_changes = run_ruleset(ctx, ruleset.get("rules") or [])
-
-        changes: list[dict] = []
-        for key, value in final_fields.items():
-            if key.startswith("__"):
-                continue
-            before = md["fields"].get(key) or ""
-            if before != value:
-                changes.append({
-                    "field": key,
-                    "label": FIELD_BY_KEY[key].label if key in FIELD_BY_KEY else key,
-                    "before": before,
-                    "after": value,
-                })
-        # Cover art composes sequentially inside the ruleset: report one
-        # change record reflecting the NET effect of all cover rules.
-        final_data = ctx.cover_state.get("data") or ""
-        final_mime = ctx.cover_state.get("mime") or "image/jpeg"
-        final_name = ctx.cover_state.get("name") or ""
-        if final_data != original_data:
-            if final_data:
-                changes.append({
-                    "field": "__cover__",
-                    "label": "Cover Art",
-                    "before": "artwork present" if original_data else "no artwork",
-                    "after": final_name or (final_mime.split("/")[-1] + " image"),
-                    "_mime": final_mime,
-                    "_data_base64": final_data,
-                })
-            else:
-                changes.append({
-                    "field": "__cover__",
-                    "label": "Cover Art",
-                    "before": "artwork present" if original_data else "no artwork",
-                    "after": "remove",
-                })
-        new_filename = ctx.filename
-        rename = new_filename != filename
-        if rename:
-            changes.append({
-                "field": "filename",
-                "label": "File Name",
-                "before": filename,
-                "after": new_filename,
-            })
-
-        warnings: list[str] = []
-        written = False
-        cover_action = next((c for c in changes if c.get("field") == "__cover__"), None)
-        if not dry_run and (changes or rename):
-            try:
-                write_changes = {
-                    change["field"]: change["after"]
-                    for change in changes
-                    if change["field"] in FIELD_BY_KEY
-                }
-                if write_changes:
-                    warnings.extend(write_fields(path, write_changes, rename_to=new_filename if rename else None))
-                elif rename:
-                    warnings.extend(write_fields(path, {}, rename_to=new_filename))
-                if cover_action:
-                    if cover_action.get("after") == "remove":
-                        warnings.extend(remove_cover(path))
-                    else:
-                        warnings.extend(write_cover(path, cover_action.get("_mime") or "image/jpeg", cover_action.get("_data_base64") or ""))
-                written = True
-            except (MetadataError, OSError) as exc:
-                warnings.append(str(exc))
-
-        results.append({
-            "path": path,
-            "filename": filename,
-            "new_filename": new_filename,
-            "changes": changes,
-            "warnings": warnings,
-            "written": written,
-        })
 
     changed = len([r for r in results if r["changes"]])
     return {
@@ -813,3 +752,110 @@ def apply_ruleset(paths: list[str], ruleset: dict, dry_run: bool) -> dict:
         "changed_files": changed,
         "dry_run": bool(dry_run),
     }
+
+
+def _apply_to_file(path: str, ruleset: dict, dry_run: bool) -> dict:
+    """Compute (and unless dry_run, perform) one file's changes."""
+    from app.services.rules import RuleContext, run_ruleset
+
+    md = read_track(path)
+    filename = md["file"]["filename"]
+    parent_dir = str(Path(path).parent)
+    rule_fields = dict(md["fields"])
+    original_cover = md.get("cover")
+    original_data = (original_cover or {}).get("data_base64", "") or ""
+    original_mime = (original_cover or {}).get("mime") or "image/jpeg"
+    rule_fields["__has_cover__"] = "1" if original_data else ""
+    rule_fields["__cover_data__"] = original_data
+    rule_fields["__cover_mime__"] = original_mime
+    ctx = RuleContext(fields=rule_fields, filename=filename, parent_dir=parent_dir, path=path)
+    final_fields, _changes = run_ruleset(ctx, ruleset.get("rules") or [])
+
+    changes: list[dict] = []
+    for key, value in final_fields.items():
+        if key.startswith("__"):
+            continue
+        before = md["fields"].get(key) or ""
+        if before != value:
+            changes.append({
+                "field": key,
+                "label": field_label(key),
+                "before": before,
+                "after": value,
+            })
+    # Cover art composes sequentially inside the ruleset: report one
+    # change record reflecting the NET effect of all cover rules.
+    final_data = ctx.cover_state.get("data") or ""
+    final_mime = ctx.cover_state.get("mime") or "image/jpeg"
+    final_name = ctx.cover_state.get("name") or ""
+    if final_data != original_data:
+        if final_data:
+            changes.append({
+                "field": "__cover__",
+                "label": "Cover Art",
+                "before": "artwork present" if original_data else "no artwork",
+                "after": final_name or (final_mime.split("/")[-1] + " image"),
+                "_mime": final_mime,
+                "_data_base64": final_data,
+            })
+        else:
+            changes.append({
+                "field": "__cover__",
+                "label": "Cover Art",
+                "before": "artwork present" if original_data else "no artwork",
+                "after": "remove",
+            })
+    new_filename = ctx.filename
+    rename = new_filename != filename
+    if rename:
+        changes.append({
+            "field": "filename",
+            "label": "File Name",
+            "before": filename,
+            "after": new_filename,
+        })
+
+    warnings: list[str] = []
+    written = False
+    # Where the file lives now: the real path once a write has happened, or
+    # the name the rules would produce while still previewing.
+    final_filename = new_filename
+    cover_action = next((c for c in changes if c.get("field") == "__cover__"), None)
+    if not dry_run and (changes or rename):
+        write_changes = {
+            change["field"]: change["after"]
+            for change in changes
+            if change["field"] in FIELD_BY_KEY
+        }
+        # Field writes and the rename happen together, so the cover must be
+        # applied to wherever the file ended up -- not to the original path,
+        # which may no longer exist once the rename has gone through.
+        target_path = path
+        if write_changes or rename:
+            outcome = write_fields(path, write_changes, rename_to=new_filename if rename else None)
+            warnings.extend(outcome.warnings)
+            target_path = outcome.path
+            # A refused rename (name taken, OS error) leaves the file put:
+            # report the name it actually has so the UI never moves the row.
+            final_filename = Path(outcome.path).name
+        if cover_action:
+            if cover_action.get("after") == "remove":
+                warnings.extend(remove_cover(target_path))
+            else:
+                warnings.extend(write_cover(
+                    target_path,
+                    cover_action.get("_mime") or "image/jpeg",
+                    cover_action.get("_data_base64") or "",
+                ))
+        written = True
+
+    return {
+        "path": path,
+        "filename": filename,
+        "new_filename": final_filename,
+        "error": None,
+        "changes": changes,
+        "warnings": warnings,
+        "written": written,
+    }
+

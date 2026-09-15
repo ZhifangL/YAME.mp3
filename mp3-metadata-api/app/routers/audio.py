@@ -32,6 +32,7 @@ from app.schemas import (
     TracksReadResponse,
 )
 from app.services.audio_io import (
+    AUDIO_SUFFIXES,
     MetadataError,
     apply_ruleset,
     read_track,
@@ -49,7 +50,13 @@ router = APIRouter(tags=["audio"])
 @router.get("/api/rules/registry", response_model=RegistryResponse, tags=["rules"])
 def rules_registry():
     """Self-describing rule catalog + field catalog for the rule editors."""
-    return {"specs": registry_specs(), "fields": RULE_FIELDS}
+    return {
+        "specs": registry_specs(),
+        "fields": RULE_FIELDS,
+        # So the UI's drop handling recognises exactly the formats the engine
+        # does, instead of keeping its own copy of the list.
+        "audio_suffixes": sorted(AUDIO_SUFFIXES),
+    }
 
 
 @router.get(
@@ -74,6 +81,7 @@ def get_metadata(
     summary="Read metadata of many audio files at once",
 )
 def read_tracks(request: TracksReadRequest):
+    """Read many files; unreadable ones are reported in ``errors``, not fatal."""
     tracks = []
     errors = []
     for path in request.paths:
@@ -91,16 +99,20 @@ def read_tracks(request: TracksReadRequest):
 )
 def write_track(request: TrackWriteRequest):
     try:
-        warnings = write_fields(request.path, request.fields, rename_to=request.rename_to)
+        outcome = write_fields(request.path, request.fields, rename_to=request.rename_to)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except MetadataError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"track": _read_or_none(outcome.path), "warnings": outcome.warnings}
+
+
+def _read_or_none(path: str):
+    """Read a file back for the response; a failure here is not an error."""
     try:
-        track = read_track(request.path if not request.rename_to else str(__import__("pathlib").Path(request.path).parent / (request.rename_to if "." in request.rename_to else request.rename_to + __import__("pathlib").Path(request.path).suffix)))
+        return read_track(path)
     except (FileNotFoundError, MetadataError):
-        track = None
-    return {"track": track, "warnings": warnings}
+        return None
 
 
 @router.post(
@@ -118,11 +130,7 @@ def set_cover(request: CoverWriteRequest):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except MetadataError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    try:
-        track = read_track(request.path)
-    except (FileNotFoundError, MetadataError):
-        track = None
-    return {"track": track, "warnings": warnings}
+    return {"track": _read_or_none(request.path), "warnings": warnings}
 
 
 @router.post(
