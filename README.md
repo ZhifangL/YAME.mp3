@@ -1,6 +1,6 @@
-# YAME
+# YAME.mp3
 
-**Y**et **A**nother **M**etadata **E**ditor — a free, open-source, rule-based
+**Y**et **A**nother **M**etadata **E**ditor - a free, open-source, rule-based
 batch metadata editor for your local music library.
 
 Point YAME at a folder, describe the clean-up you want as a handful of visible
