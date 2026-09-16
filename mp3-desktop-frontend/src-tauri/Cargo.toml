@@ -1,0 +1,63 @@
+[package]
+name = "yame"
+version = "1.0.0"
+description = "Rule-based audio metadata batch editor"
+authors = ["YAME"]
+edition = "2021"
+rust-version = "1.77"
+license = "GPL-3.0-or-later"
+
+[lib]
+name = "yame_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# image-png lets menu items carry application icons (Image::from_bytes).
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+# Needed to signal the whole engine process group on exit: a PyInstaller
+# one-file sidecar is a bootloader plus the real server it forks.
+libc = "0.2"
+
+# Native macOS integration the webview cannot reach: the mixed file/folder
+# open panel, LaunchServices' "Open With" application list, and app icons.
+# These crates are already in the dependency tree via Tauri/wry, so declaring
+# them directly costs no extra build time.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = [
+    "NSArray",
+    "NSData",
+    "NSDictionary",
+    "NSString",
+    "NSURL",
+    "NSValue",
+    "NSGeometry",
+] }
+objc2-app-kit = { version = "0.3", features = [
+    "NSApplication",
+    "NSBitmapImageRep",
+    "NSImage",
+    "NSMenu",
+    "NSMenuItem",
+    "NSOpenPanel",
+    "NSResponder",
+    "NSSavePanel",
+    "NSWorkspace",
+] }
+
+[profile.release]
+# Ship small: the app is a thin shell around the Python sidecar.
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,158 +1,223 @@
-# TagForge
+# YAME
 
-A free, open-source **rule-based audio metadata batch editor** for the desktop.
-Built for macOS first (Windows/Linux ports planned), with a clean,
-information-first UI in the spirit of MP3tag — no scripting knowledge needed.
+**Y**et **A**nother **M**etadata **E**ditor — a free, open-source, rule-based
+batch metadata editor for your local music library.
 
-![TagForge main window](docs/main.png)
+Point YAME at a folder, describe the clean-up you want as a handful of visible
+rules, preview exactly what will change, and apply it to every file at once.
+No scripting, no terminal, no subscription.
 
-TagForge turns the repetitive tag clean-up you do on every downloaded batch of
-music into a small set of visible, editable **rules**: build a ruleset once,
-preview exactly what it would change, apply it to a whole folder, and save it
-as a preset for next time.
+![The YAME main window](assets/main-window.png)
 
-> "TagForge" is a placeholder name; branding is still to come.
+## Download
+
+Take the latest `.dmg` from the [Releases page](../../releases/latest), open it,
+and drag **YAME** into your Applications folder.
+
+- macOS 10.15 or later
+- Apple Silicon (M-series)
+
+## Why this exists
+
+If you keep your music as files, you already know the ritual: every new batch
+of downloads arrives with the artist buried in the title, a YouTube URL in the
+comment field, and inconsistent capitalisation. Fixing that by hand, one file
+at a time, is tedious — and the tools that automate it either cost money, hide
+the automation behind a scripting language, or make you fight the interface.
+
+YAME takes the opposite approach. The repetitive part of the job is expressed
+as **rules you can see and reorder**, the result is shown to you *before*
+anything is written, and the ruleset you built last month is one click away
+the next time you need it.
 
 ## Features
 
-- **Rules engine** — seven rule types, each a plain, understandable step:
-  | Rule | What it does | Example |
-  | --- | --- | --- |
-  | CLEAR | Removes a field's value | Clear Comment |
-  | REPLACE | Find & replace with `*` / `?` wildcards | Replace ` - ` with ` – ` in Title |
-  | WRITE | Overwrites a field with a fixed value | Write J-Pop to Genre |
-  | APPEND | Adds text to the end of a field | Append ` (Live)` to Title |
-  | COPY FROM | Copies one field (or the file name) into another | Copy Year → Album |
-  | PARSE FILENAME | Matches the file name against a pattern, fills fields from captures | `* - *` → Artist, Title |
-  | CHANGE CASE | UPPER, lower, Title or Sentence case | Title → Title Case |
-  | SET COVER | Embeds the same artwork in every file, or removes existing artwork | Batch album art |
-- **Live preview** — the rule builder shows the before/after on a real selected
-  track before you commit the rule.
-- **Dry-run review** — Apply always previews every per-file change first;
-  nothing is written until you confirm.
-- **Presets** — save named rulesets and reload them in one click; a "Manage
-  rulesets" dialog handles import, export and batch delete. Presets live in
-  `~/.config/tagforge/presets.json` (override with `TAGFORGE_CONFIG_DIR`).
-- **Multi-format** — reads MP3, M4A/AAC, FLAC, OGG/Opus, WAV, AIFF, WMA,
-  MusePack, Monkey's Audio, WavPack and TrueAudio. Writes tags on MP3
-  (ID3v2.3), M4A, FLAC/OGG/Opus, WAV/AIFF (ID3), and APEv2 formats.
-- **Cover art** — displayed in the track panel and the edit window. Set it by
-  clicking the artwork, dropping an image from Finder, or pasting from the
-  clipboard; the edit window can also remove it, and the SET COVER rule
-  batches it across files.
-- **Familiar layout** — rules sidebar, MP3tag-style track table with a sticky
-  header row, sortable / reorderable / resizable columns (right-click a header
-  to freeze or hide columns — your layout persists between sessions), search,
-  Ctrl/Cmd+A select-all, a floating "iPod" detail panel anchored bottom-right
-  (collapsible, cover drag & drop / paste) and a draggable, resizable edit
-  window (double-click a row) with a "More info" section.
-- **Track context menu** — right-click a song for Open (default app), Open
-  with…, Copy, Paste, Remove from list and Show in Finder. These use real OS
-  integration in the packaged Tauri app (shell + pasteboard plugins); the
-  browser dev build degrades gracefully with clipboard text and toasts.
-- **Native open dialogs** — one "Add music" button opens the OS folder picker
-  (Finder/Explorer) and imports every audio file in that folder *and its
-  sub-folders*; you can also drop files or folders straight onto the track
-  list. Browsers hide absolute paths, so dev mode re-locates the pick on disk;
-  the packaged Tauri build passes paths straight from the native dialog plugin
-  (no upload ever happens — files stay local).
-- The rule engine is **extensible by design**: every rule is a self-describing
-  class in `app/services/rules.py`, registered in one place, and the UI
-  renders its editor automatically from the engine's registry — adding a new
-  rule type needs no frontend work.
+- **Nine rule types**, each a single plain step — see [The rules](#the-rules).
+- **Live preview** — the rule builder shows the before/after on a real track
+  from your selection as you type, and picks the first track the rule actually
+  affects.
+- **Dry run by default** — *Apply* always shows every per-file change first.
+  Nothing touches your files until you confirm.
+- **Presets** — save a ruleset, reload it in one click, export and import
+  rulesets to share them.
+- **Cover art** — shown in the track panel and editor; set it by clicking,
+  dragging an image in, or pasting from the clipboard. Embed the same artwork
+  across a whole batch with a rule.
+- **Fast, familiar table** — sortable, reorderable, resizable columns; freeze
+  and hide columns by right-clicking a header. Your layout is remembered.
+- **Feels like a Mac** — a real menu bar, real context menus (including
+  **Open With ▸**, populated from Launch Services with each app's own icon),
+  and the usual keyboard shortcuts.
+- **Local and private** — everything runs on your machine. Nothing is uploaded,
+  and YAME never touches the network.
+
+## The rules
+
+Rules run top to bottom, and you can reorder or disable any of them.
+
+| Rule | What it does | Example |
+| --- | --- | --- |
+| **Clear** | Removes a field's value | Clear Comment |
+| **Replace** | Find and replace, with `*` and `?` wildcards | Replace ` - ` with ` – ` in Title |
+| **Write** | Overwrites a field with a fixed value | Write J-Pop to Genre |
+| **Append** | Adds text to the end of a field | Append ` (Live)` to Title |
+| **Copy From** | Copies one field into another | Copy Year → Album |
+| **Parse Filename** | Matches the file name and fills fields from the captures | `* - *` → Artist, Title |
+| **Change Case** | UPPER, lower, Title or Sentence case | Title → Title Case |
+| **Set Cover Art** | Embeds one image in every file | Batch album art |
+| **Remove Cover Art** | Strips embedded artwork | Clear all covers |
+
+Wildcards: `*` matches any run of characters, `?` matches exactly one.
+Replace inserts its text literally — to move part of a value into a field, use
+**Parse Filename**, which assigns each `*` capture to a field you choose.
+
+## How a ruleset works
+
+1. **Build** — pick a rule type and fill in its fields. YAME previews the
+   change on a track you have selected before you commit to anything.
+2. **Review** — press *Apply* for a dry run: every file that would change, and
+   exactly how.
+
+   ![Reviewing changes before applying](assets/review-changes.png)
+
+3. **Apply** — write the changes, or go back and adjust the rules.
+4. **Save** — keep the ruleset as a preset, so the next batch takes one click.
+
+## Supported formats
+
+YAME reads MP3, M4A/AAC/MP4, FLAC, OGG Vorbis, Opus, WAV, AIFF, WMA/ASF,
+MusePack, Monkey's Audio, WavPack and TrueAudio. It writes tags on MP3, M4A,
+FLAC, OGG/Opus, WAV and AIFF, plus the APEv2 family. WMA/ASF is read-only (a
+limitation of the underlying tag library), and YAME says so rather than
+pretending it saved.
+
+One field catalogue maps every concept onto each format's own tag names, so a
+ruleset written against an MP3 applies unchanged to a FLAC or an M4A.
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `⌘O` | Open files (replaces the list) |
+| `⇧⌘O` | Add files to the list |
+| `⌘F` | Focus search |
+| `⌘A` | Select every track |
+| `⌘C` / `⌘V` | Copy tracks / paste files from the Finder |
+| `↑` `↓` | Move the selection through the list |
+| `⌘`-click | Add or remove a track from the selection |
+| `⇧`-click | Select a range |
+| Double-click | Open the full editor |
+
+Editing the file name is also how you rename a file on disk. YAME keeps the
+original extension, because renaming does not convert between formats — and it
+will never let a rule leave a file nameless.
+
+![The track editor](assets/edit-window.png)
+
+## Where your data lives
+
+| What | Where |
+| --- | --- |
+| Presets | `~/.config/yame/presets.json` |
+| Table layout | Local app storage |
+
+Presets are plain JSON — easy to read, easy to back up, easy to share. Set
+`YAME_CONFIG_DIR` to keep them somewhere else.
+
+## Building from source
+
+You will need Node 20+, [pnpm](https://pnpm.io), Python 3.13 with
+[uv](https://docs.astral.sh/uv/), and Rust 1.77+.
+
+```bash
+git clone https://github.com/ZhifangL/mp3MetadataEditor.git
+cd mp3MetadataEditor
+```
+
+**Run it in development** (two terminals):
+
+```bash
+# 1. the engine — picks a free port and publishes it
+cd mp3-metadata-api
+uv sync
+.venv/bin/python main.py
+
+# 2. the interface
+cd mp3-desktop-frontend
+pnpm install
+pnpm run dev            # http://localhost:5173
+```
+
+The Vite dev server reads the port the engine published, so the two find each
+other without any configuration. Add `?folder=/path/to/music` to the URL to
+load a folder on startup.
+
+**Build the app:**
+
+```bash
+cd mp3-desktop-frontend
+pnpm run package        # -> src-tauri/target/release/bundle/
+```
+
+That freezes the engine with PyInstaller, builds the interface, compiles the
+Rust shell, and writes `YAME.app` and a `.dmg`. A full macOS bundle is about
+20 MB.
+
+Other useful scripts:
+
+| Command | What it does |
+| --- | --- |
+| `pnpm run desktop:dev` | Tauri window against the running dev server |
+| `pnpm run sidecar` | Rebuild just the bundled engine |
+| `pnpm run icon` | Regenerate the app icon from `public/favicon.svg` |
+
+**Tests:**
+
+```bash
+cd mp3-metadata-api && .venv/bin/python -m pytest    # engine
+cd mp3-desktop-frontend/src-tauri && cargo test      # Rust shell
+```
 
 ## Architecture
 
 ```
-mp3-desktop-frontend/   React + TypeScript + Vite UI (the app shell)
-mp3-metadata-api/       FastAPI engine: browsing, tag read/write,
-                        the rules engine, presets — plain Python + mutagen
-sample-mp3/             demo files with real tags for testing
-mp3-ui/                 the Penpot design source the UI follows
-docs/                   screenshots
+mp3-desktop-frontend/    React + TypeScript interface
+  src-tauri/             Rust desktop shell (Tauri v2)
+mp3-metadata-api/        Python engine — tag I/O, rules engine, presets
+assets/                  screenshots
 ```
 
-The UI talks to the engine over HTTP on `127.0.0.1:8000` (`/api/…`). This is
-the **sidecar model**: in the packaged app the same FastAPI process ships next
-to the frontend and is launched by the shell, so the dev setup and the
-production setup differ only in how the processes are started.
+YAME is two processes. A small Rust shell hosts the interface in a native
+webview and supervises the Python engine as a bundled sidecar. The shell picks
+a free loopback port, starts the engine on it, and hands the address to the
+interface before any page code runs — which is why the window opens instantly
+and simply waits for the engine to answer.
 
-The engine is intentionally file-I/O and HTTP only — no native deps beyond
-mutagen — so it can be bundled with PyInstaller (or run from a managed venv)
-on all three platforms.
+The engine owns all file I/O and knows nothing about React. The interface owns
+all presentation and knows nothing about tag formats: it renders its rule
+editors from a schema the engine serves, so adding a new rule type needs no
+frontend work at all.
 
-## Run it (development)
+| Layer | Built with |
+| --- | --- |
+| Interface | React 19, TypeScript, Vite |
+| Shell | Rust, Tauri 2 |
+| Engine | Python 3.13, FastAPI, mutagen |
+| Packaging | PyInstaller (engine sidecar), Tauri bundler |
 
-You need Node 20+, pnpm, and Python 3.13 with `uv`.
+## Windows and Linux
 
-```bash
-# 1. engine (terminal 1)
-cd mp3-metadata-api
-uv sync
-.venv/bin/python main.py          # picks a free port (8000 unless taken)
-
-# 2. UI (terminal 2)
-cd mp3-desktop-frontend
-pnpm install
-pnpm run dev                      # the proxy follows the engine's port automatically
-```
-
-The engine writes its actual port to `~/.config/tagforge/engine.port` and
-falls back to an ephemeral port when 8000 is busy, so the dev proxy and the
-future Tauri sidecar launcher never hard-code a port. To auto-load a folder
-while developing:
-
-```
-http://localhost:5173/?folder=/absolute/path/to/music
-```
-
-Production build of the UI: `pnpm run build` in `mp3-desktop-frontend`.
-
-## Engine API
-
-Interactive docs at <http://127.0.0.1:8000/docs>. Endpoints:
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/api/browse?path=` | List folders + audio files |
-| GET | `/api/metadata?path=` | Read one file (tags, stream info, cover) |
-| POST | `/api/tracks/read` | Read many files at once |
-| POST | `/api/tracks/write` | Write fields of one file (rename supported) |
-| POST | `/api/tracks/cover` | Replace embedded cover art |
-| GET | `/api/rules/registry` | Rule + field catalog the UI renders from |
-| POST | `/api/preview` | Dry-run one rule on given values |
-| POST | `/api/apply` | Dry-run or apply a ruleset to many files |
-| GET/PUT/DELETE | `/api/presets` | Named rulesets (stored in `~/.config/tagforge/`) |
-
-## Packaging as a native app (planned)
-
-The final deliverable is a **Tauri** app (tiny binary, WebView shell, Python
-sidecar) — Rust is not installed on this machine yet, so packaging is the
-next milestone:
-
-1. `src-tauri` shell with the built frontend from `mp3-desktop-frontend/dist`.
-2. Bundle the engine as a sidecar binary (PyInstaller onefile from
-   `mp3-metadata-api`), started by Tauri on `127.0.0.1:8000`.
-3. Replace the folder browser with the native `dialog` plugin; keep the
-   HTTP contract identical.
-
-## Design notes
-
-- Colors, spacing and layout follow the Penpot board in `mp3-ui/`
-  (purple `#6D28D9`/`#7C3AED`, neutral Apple-ish grays, Inter/system font).
-- The app nudges users toward rule-based editing as the default: the rules
-  sidebar is always visible, the table is read-first, and manual edits are
-  available for the exceptions rather than the rule.
-- Wildcards: `*` matches any run of characters, `?` matches exactly one.
-  REPLACE treats **Replace with** literally (there are no capture references);
-  to move part of a value into a field, use PARSE FILENAME, which assigns each
-  `*` capture to a field through a dropdown.
-- A rule must be complete before it can be committed: REPLACE needs a **Find**
-  pattern (an empty one would match everywhere), and PARSE FILENAME needs a
-  pattern plus at least one capture assigned to a field. The engine reports
-  these requirements as `required` params in `/api/rules/registry`, and the
-  rule builder keeps its button disabled until they are met.
+YAME is built for macOS first. The engine is pure Python and the shell is
+already platform-neutral, so porting is mostly a matter of filling in a few
+OS-specific calls — the "Open with" chooser, and putting file references on the
+clipboard. Each platform's branch in `src-tauri/src/platform.rs` is marked with
+the API it needs.
 
 ## License
 
-Free and open source (license to be chosen before first release).
+GNU General Public License v3.0 or later — see [LICENSE](LICENSE).
+
+## Credits
+
+Built with [FastAPI](https://fastapi.tiangolo.com),
+[mutagen](https://mutagen.readthedocs.io) and [Tauri](https://tauri.app).

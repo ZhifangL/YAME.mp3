@@ -9,7 +9,7 @@ import { defineConfig } from 'vite'
 // follows it instead of hard-coding 8000.
 function enginePort(): number {
   try {
-    const configDir = process.env.TAGFORGE_CONFIG_DIR || path.join(os.homedir(), '.config', 'tagforge')
+    const configDir = process.env.YAME_CONFIG_DIR || path.join(os.homedir(), '.config', 'yame')
     const port = parseInt(fs.readFileSync(path.join(configDir, 'engine.port'), 'utf8').trim(), 10)
     if (Number.isFinite(port) && port > 0 && port < 65536) return port
   } catch {

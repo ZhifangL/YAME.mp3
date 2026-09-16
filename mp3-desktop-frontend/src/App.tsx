@@ -11,6 +11,7 @@ import { Toast } from './components/Toast'
 import { TrackTable } from './components/TrackTable'
 import { PickerInputs } from './pickers'
 import { useStore } from './store-context'
+import { useNativeFileDrop } from './useNativeFileDrop'
 
 function App() {
   const { init, editTrackPath } = useStore()
@@ -18,6 +19,9 @@ function App() {
   useEffect(() => {
     init()
   }, [init])
+
+  // Real absolute paths for drag-and-drop in the packaged app.
+  useNativeFileDrop()
 
   return (
     <div className="app">

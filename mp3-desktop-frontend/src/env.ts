@@ -1,6 +1,6 @@
 // Runtime environment detection.
 //
-// The packaged Tauri build injects `window.__TAGFORGE_ENGINE__` (the sidecar's
+// The packaged Tauri build injects `window.__YAME_ENGINE__` (the sidecar's
 // origin) from the Rust shell, which reads the port the engine publishes. In
 // the browser dev build none of this exists and the Vite proxy serves /api,
 // so the defaults below keep dev working unchanged.
@@ -13,7 +13,7 @@ export interface EngineBridge {
 declare global {
   interface Window {
     __TAURI_INTERNALS__?: unknown
-    __TAGFORGE_ENGINE__?: EngineBridge
+    __YAME_ENGINE__?: EngineBridge
   }
 }
 
@@ -31,7 +31,7 @@ export function isTauri(): boolean {
  * webview instead of reaching the engine.
  */
 export function apiBase(): string {
-  const injected = typeof window !== 'undefined' ? window.__TAGFORGE_ENGINE__?.origin : undefined
+  const injected = typeof window !== 'undefined' ? window.__YAME_ENGINE__?.origin : undefined
   if (injected) return injected.replace(/\/+$/, '') + '/api'
   return '/api'
 }

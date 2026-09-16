@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,7 @@ def client() -> TestClient:
 
 
 def test_health_reports_the_config_dir(client: TestClient, monkeypatch, tmp_path: Path):
-    monkeypatch.setenv("TAGFORGE_CONFIG_DIR", str(tmp_path / "cfg"))
+    monkeypatch.setenv("YAME_CONFIG_DIR", str(tmp_path / "cfg"))
     body = client.get("/api/health").json()
     assert body["status"] == "ok"
     assert body["config_dir"] == str(tmp_path / "cfg")
@@ -212,7 +213,7 @@ def test_browse_lists_audio_files(client: TestClient, audio_file: Path):
 
 
 def test_preset_round_trip(client: TestClient, monkeypatch, tmp_path: Path):
-    monkeypatch.setenv("TAGFORGE_CONFIG_DIR", str(tmp_path / "cfg"))
+    monkeypatch.setenv("YAME_CONFIG_DIR", str(tmp_path / "cfg"))
     ruleset = {"name": "Cleanup", "rules": [
         {"type": "CLEAR", "params": {"field": "comment"}, "enabled": True},
     ]}
@@ -232,5 +233,141 @@ def test_preset_round_trip(client: TestClient, monkeypatch, tmp_path: Path):
 
 
 def test_deleting_an_unknown_preset_is_404(client: TestClient, monkeypatch, tmp_path: Path):
-    monkeypatch.setenv("TAGFORGE_CONFIG_DIR", str(tmp_path / "cfg"))
+    monkeypatch.setenv("YAME_CONFIG_DIR", str(tmp_path / "cfg"))
     assert client.delete("/api/presets/nope").status_code == 404
+
+
+def test_cover_from_file_embeds_a_dropped_image(client: TestClient, audio_file: Path, png_bytes: bytes, tmp_path: Path):
+    """The packaged app hands over a path (Finder drop / native picker) rather
+    than base64 from a browser file input."""
+    image = tmp_path / "art.png"
+    image.write_bytes(png_bytes)
+
+    res = client.post("/api/tracks/cover-from-file", json={"path": str(audio_file), "image_path": str(image)})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["warnings"] == []
+    assert body["track"]["cover"]["mime"] == "image/png"
+    assert base64.b64decode(body["track"]["cover"]["data_base64"]) == png_bytes
+
+
+def test_cover_from_file_rejects_a_non_image(client: TestClient, audio_file: Path, tmp_path: Path):
+    notes = tmp_path / "notes.txt"
+    notes.write_text("not an image")
+    res = client.post("/api/tracks/cover-from-file", json={"path": str(audio_file), "image_path": str(notes)})
+    assert res.status_code == 422
+    assert "Unsupported cover image type" in res.json()["detail"]
+
+
+def test_cover_from_file_missing_image_is_404(client: TestClient, audio_file: Path, tmp_path: Path):
+    res = client.post("/api/tracks/cover-from-file", json={
+        "path": str(audio_file), "image_path": str(tmp_path / "nope.png"),
+    })
+    assert res.status_code == 404
+
+
+def test_presets_are_adopted_from_the_pre_rebrand_config_dir(monkeypatch, tmp_path: Path):
+    """The app shipped as TagForge; an upgrade must not lose saved rulesets."""
+    from app.services import presets as presets_module
+
+    legacy_home = tmp_path / "home"
+    (legacy_home / ".config" / "tagforge").mkdir(parents=True)
+    (legacy_home / ".config" / "tagforge" / "presets.json").write_text(
+        json.dumps({"version": 1, "presets": [{
+            "id": "keepme", "name": "Old Rules",
+            "ruleset": {"name": "Old Rules", "rules": []}, "updated_unix": 1.0,
+        }]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(presets_module.Path, "home", staticmethod(lambda: legacy_home))
+    monkeypatch.delenv("YAME_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("TAGFORGE_CONFIG_DIR", raising=False)
+    monkeypatch.setattr(presets_module, "_migrated", False)
+
+    names = [p["name"] for p in presets_module.list_presets()]
+    assert names == ["Old Rules"]
+    # The original file is left untouched.
+    assert (legacy_home / ".config" / "tagforge" / "presets.json").is_file()
+
+
+def test_foreign_web_origins_are_refused(client: TestClient):
+    """The engine can rewrite files anywhere the user can write, so a page in
+    the user's browser must not be able to drive it."""
+    evil = client.post(
+        "/api/apply",
+        json={"paths": ["/tmp/x.mp3"], "ruleset": {"name": "x", "rules": []}, "dry_run": True},
+        headers={"Origin": "https://evil.example"},
+    )
+    assert evil.status_code == 403
+
+    # Preflight too, so the browser never sends the real request.
+    preflight = client.options(
+        "/api/apply",
+        headers={
+            "Origin": "https://evil.example",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert preflight.status_code == 403
+
+
+def test_the_apps_own_origins_still_work(client: TestClient):
+    for origin in ("tauri://localhost", "http://localhost:5173"):
+        res = client.get("/api/health", headers={"Origin": origin})
+        assert res.status_code == 200, origin
+
+
+def test_requests_without_an_origin_still_work(client: TestClient):
+    # curl, the sidecar's own checks and any local tooling.
+    assert client.get("/api/health").status_code == 200
+
+
+def test_importing_a_malformed_ruleset_cannot_brick_the_preset_store(
+    client: TestClient, monkeypatch, tmp_path: Path
+):
+    """A stored preset with the wrong shape used to make every later
+    GET /api/presets fail validation, so the bad entry could not be deleted."""
+    monkeypatch.setenv("YAME_CONFIG_DIR", str(tmp_path / "cfg"))
+
+    imported = client.post("/api/presets/import", json={"presets": [
+        {"name": "List ruleset", "ruleset": ["not", "a", "dict"]},
+        {"name": "Bad rules", "ruleset": {"name": "Bad rules", "rules": "nope"}},
+        {"name": "Junk rules", "ruleset": {"rules": [1, {"type": ""}, {"type": "CLEAR", "params": "x"}]}},
+        {"name": "Good", "ruleset": {"name": "Good", "rules": [
+            {"type": "CLEAR", "params": {"field": "comment"}, "enabled": True},
+        ]}},
+    ]}).json()
+    assert len(imported) == 4
+
+    # The list must still load, and must still be valid.
+    listed = client.get("/api/presets")
+    assert listed.status_code == 200
+    names = [p["name"] for p in listed.json()]
+    assert names == ["List ruleset", "Bad rules", "Junk rules", "Good"]
+
+    good = next(p for p in listed.json() if p["name"] == "Good")
+    assert good["ruleset"]["rules"][0]["type"] == "CLEAR"
+    junk = next(p for p in listed.json() if p["name"] == "Junk rules")
+    assert [r["type"] for r in junk["ruleset"]["rules"]] == ["CLEAR"]
+    assert junk["ruleset"]["rules"][0]["params"] == {}
+
+    # And it can still be deleted.
+    assert client.delete(f"/api/presets/{junk['id']}").status_code == 200
+
+
+def test_presets_written_out_of_shape_are_tolerated_on_read(
+    client: TestClient, monkeypatch, tmp_path: Path
+):
+    """A file left by an older build must not break the list either."""
+    cfg = tmp_path / "cfg"
+    cfg.mkdir(parents=True)
+    (cfg / "presets.json").write_text(json.dumps({"version": 1, "presets": [
+        {"id": "a", "name": "Fine", "ruleset": {"name": "Fine", "rules": []}, "updated_unix": 1.0},
+        "not even an object",
+        {"id": "b", "ruleset": {"rules": []}},
+    ]}), encoding="utf-8")
+    monkeypatch.setenv("YAME_CONFIG_DIR", str(cfg))
+
+    body = client.get("/api/presets")
+    assert body.status_code == 200
+    assert [p["name"] for p in body.json()] == ["Fine"]

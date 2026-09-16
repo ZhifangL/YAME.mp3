@@ -1,4 +1,4 @@
-// Thin client for the TagForge engine (FastAPI on 127.0.0.1).
+// Thin client for the YAME engine (FastAPI on 127.0.0.1).
 // Vite proxies /api to the engine during dev; the packaged Tauri build talks
 // to the sidecar directly, so the base URL is resolved at call time.
 import { apiBase } from './env'
@@ -25,7 +25,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(apiBase() + path, init)
   } catch (err) {
-    throw new Error('Cannot reach the TagForge engine. Is it running?', { cause: err })
+    throw new Error('Cannot reach the YAME engine. Is it running?', { cause: err })
   }
   if (!res.ok) {
     let detail = res.status + ' ' + res.statusText
@@ -51,10 +51,8 @@ function post<T>(path: string, body: unknown): Promise<T> {
 export const api = {
   health: (): Promise<HealthResponse> => request<HealthResponse>('/health'),
 
-  browse: (path?: string, recursive = false): Promise<BrowseResponse> =>
-    request<BrowseResponse>(
-      '/browse' + (path ? '?path=' + encodeURIComponent(path) : '') + (recursive ? (path ? '&' : '?') + 'recursive=true' : ''),
-    ),
+  browse: (path: string): Promise<BrowseResponse> =>
+    request<BrowseResponse>('/browse?path=' + encodeURIComponent(path)),
 
   registry: (): Promise<RegistryResponse> => request<RegistryResponse>('/rules/registry'),
 
@@ -70,8 +68,9 @@ export const api = {
   removeCover: (path: string): Promise<{ track: Track | null; warnings: string[] }> =>
     post('/tracks/cover', { path, remove: true }),
 
-  preview: (filename: string, folder: string, fields: Record<string, string>, rule: RuleInstance): Promise<{ changes: ChangeRecord[]; fields: Record<string, string>; filename: string }> =>
-    post('/preview', { filename, folder, fields, rule: { type: rule.type, params: rule.params, enabled: rule.enabled } }),
+  /** Embed an image that is already on disk (Finder drop / native picker). */
+  setCoverFromFile: (path: string, imagePath: string): Promise<{ track: Track | null; warnings: string[] }> =>
+    post('/tracks/cover-from-file', { path, image_path: imagePath }),
 
   previewBatch: (
     candidates: { filename: string; folder: string; fields: Record<string, string>; cover: { mime: string; data_base64: string } | null }[],
@@ -84,6 +83,10 @@ export const api = {
 
   resolveFiles: (names: string[], previousPath?: string | null): Promise<{ paths: string[] }> =>
     post('/resolve-files', { names, previous_path: previousPath ?? null }),
+
+  /** Flatten a mixed selection of audio files and folders (a Finder drag). */
+  expandPaths: (paths: string[]): Promise<{ files: string[]; skipped: string[]; truncated: boolean }> =>
+    post('/paths/expand', { paths }),
 
   apply: (paths: string[], ruleset: Ruleset, dryRun: boolean): Promise<ApplyResponse> =>
     post('/apply', { paths, ruleset: { name: ruleset.name, rules: ruleset.rules.map((r) => ({ type: r.type, params: r.params, enabled: r.enabled })) }, dry_run: dryRun }),

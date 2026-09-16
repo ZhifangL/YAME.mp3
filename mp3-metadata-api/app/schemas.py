@@ -67,13 +67,19 @@ class MetadataResponse(BaseModel):
 class RuleParamSpec(BaseModel):
     name: str
     label: str
-    kind: str  # field | text | choice | bool | separator | parse_pattern | parse_assignments
+    kind: str  # field | text | choice | bool | separator | image | parse_pattern | parse_assignments
     choices: list[dict] = []
     default: Any = None
     placeholder: Optional[str] = None
     help: Optional[str] = None
     # The UI keeps its commit button disabled until every required param is set.
     required: bool = False
+    # Field keys this picker must not offer (e.g. the file name, where a rule
+    # would be circular or destructive).
+    exclude: list[str] = []
+    # "target" (writable fields only) or "source" (any field, including the
+    # read-only pseudo-fields like File Name (no extension)).
+    role: str = "target"
 
 
 class RuleSpec(BaseModel):
@@ -153,6 +159,18 @@ class FilesResolveResponse(BaseModel):
     paths: list[str] = []
 
 
+class ExpandPathsRequest(BaseModel):
+    """A mixed selection of files and folders (a Finder/Explorer drag, say)."""
+
+    paths: list[str] = []
+
+
+class ExpandPathsResponse(BaseModel):
+    files: list[str] = []
+    skipped: list[str] = []
+    truncated: bool = False
+
+
 class TracksReadRequest(BaseModel):
     paths: list[str] = []
 
@@ -190,6 +208,11 @@ class CoverWriteRequest(BaseModel):
     mime: str = "image/jpeg"
     data_base64: str = ""
     remove: bool = False
+
+
+class CoverFromFileRequest(BaseModel):
+    path: str
+    image_path: str
 
 
 class PresetImportRequest(BaseModel):

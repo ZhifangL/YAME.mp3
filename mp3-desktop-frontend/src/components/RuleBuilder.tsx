@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { parseAssignments, previewSummary, specFor } from '../rules'
+import { parseAssignments, previewSummary, selectableFields, specFor } from '../rules'
 import { useStore } from '../store-context'
 import type { ChangeRecord, RegistryResponse, RuleParamSpec, Track } from '../types'
 import { dirOf, readImageFile } from '../utils'
@@ -149,6 +149,20 @@ function formatPreview(res: { changes: ChangeRecord[]; filename: string }): stri
  * caller can show as the disabled button's tooltip.
  */
 function draftProblem(registry: RegistryResponse, params: RuleParamSpec[], values: Record<string, unknown>): string | null {
+  // A literal empty value aimed at a field that must never be blank would be
+  // refused by the engine, so block it here and say why rather than letting
+  // the user commit a rule that silently does nothing.
+  const target = values.field
+  if (typeof target === 'string') {
+    const field = registry.fields.find((f) => f.key === target)
+    if (field?.must_not_be_empty) {
+      const supplied = params.find((p) => p.name === 'value')
+      if (supplied && !String(values[supplied.name] ?? '').trim()) {
+        return '“' + field.label + '” cannot be left empty.'
+      }
+    }
+  }
+
   for (const p of params) {
     const v = values[p.name]
     switch (p.kind) {
@@ -203,7 +217,7 @@ function ParamEditor({ param }: { param: RuleParamSpec }) {
           value={String(value ?? '')}
           onChange={(e) => updateDraftParam(param.name, e.target.value)}
         >
-          {registry.fields.map((f) => (
+          {selectableFields(registry, param).map((f) => (
             <option key={f.key} value={f.key}>
               {f.label}
             </option>
@@ -274,14 +288,20 @@ function ParamEditor({ param }: { param: RuleParamSpec }) {
 }
 
 function ImageParamEditor({ value }: { value: { mime?: string; data_base64?: string } | null }) {
-  const { updateDraftParam } = useStore()
+  const { updateDraftParam, showToast } = useStore()
   const fileInput = useRef<HTMLInputElement>(null)
   const hasImage = Boolean(value && value.data_base64)
 
   const onPick = async (file: File) => {
-    if (file.size > 10 * 1024 * 1024) return
-    const image = await readImageFile(file)
-    updateDraftParam('image', image)
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Cover image is larger than 10 MB', 'error')
+      return
+    }
+    try {
+      updateDraftParam('image', await readImageFile(file))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'error')
+    }
   }
 
   return (
@@ -330,6 +350,12 @@ function ParsePatternEditor({ pattern }: { pattern: string }) {
   )
   if (!registry || !draft) return null
   const includeExtension = Boolean(draft.params.include_extension)
+  // The name fields are excluded: a capture from the file name must not be
+  // assigned back to the file name.
+  const assignmentsParam = specFor(registry, draft.type)?.params.find(
+    (p) => p.kind === 'parse_assignments',
+  )
+  const fieldChoices = assignmentsParam ? selectableFields(registry, assignmentsParam) : registry.fields
 
   return (
     <div className="field-row">
@@ -368,7 +394,7 @@ function ParsePatternEditor({ pattern }: { pattern: string }) {
                 <option value="" style={{ fontStyle: 'italic', color: '#888888' }}>
                     (skip)
                 </option>
-                {registry.fields.map((f) => (
+                {fieldChoices.map((f) => (
                     <option key={f.key} value={f.key} style={{ fontStyle: 'normal', color: 'initial' }}>
                         {f.label}
                     </option>

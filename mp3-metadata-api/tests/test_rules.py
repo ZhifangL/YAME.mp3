@@ -265,9 +265,36 @@ def test_cover_rules_compose_in_order():
     assert remove_then_set.cover_state["data"] == "AAAA"
 
 
-def test_set_cover_without_an_image_removes_artwork():
+def test_set_cover_without_an_image_is_a_no_op():
+    """An incomplete rule must not be able to strip artwork from a batch."""
     context = RuleContext(fields={"__cover_data__": "AAAA"}, filename="a.mp3", parent_dir="/m", path="/m/a.mp3")
-    assert apply("SET COVER", {"image": None}, context)[0]["after"] == "remove"
+    assert apply("SET COVER", {"image": None}, context) == []
+    assert apply("SET COVER", {"image": {"mime": "image/png"}}, context) == []
+    assert context.cover_state["data"] == "AAAA"
+
+
+def test_set_cover_legacy_remove_mode_still_works():
+    context = RuleContext(fields={"__cover_data__": "AAAA"}, filename="a.mp3", parent_dir="/m", path="/m/a.mp3")
+    assert apply("SET COVER", {"image": None, "mode": "remove"}, context)[0]["after"] == "remove"
+
+
+def test_parse_filename_ignores_stale_capture_indices():
+    """Shortening the pattern leaves old assignments in a saved rule."""
+    context = RuleContext(fields={"title": "T"}, filename="Plain.mp3", parent_dir="/m", path="/m/Plain.mp3")
+    changes = apply("PARSE FILENAME", {
+        "pattern": "*", "assignments": {"1": "title", "2": "artist", "9": "album"},
+    }, context)
+    # Capture 1 exists and is applied; the stale 2 and 9 are ignored rather
+    # than raising IndexError and failing the request.
+    assert [c["field"] for c in changes] == ["title"]
+    assert context.fields["title"] == "Plain"
+    assert context.fields.get("artist", "") == ""
+    assert context.fields.get("album", "") == ""
+
+
+def test_parse_filename_survives_a_malformed_assignments_value():
+    context = ctx(title="T")
+    assert apply("PARSE FILENAME", {"pattern": "* - *", "assignments": ["not", "a", "dict"]}, context) == []
 
 
 def test_remove_cover_without_artwork_is_a_no_op():
@@ -321,3 +348,72 @@ def test_rule_context_write_to_filename_never_touches_fields():
 def test_rule_context_coerces_non_string_values():
     context = RuleContext(fields={"bpm": 120, "comment": None}, filename="a.mp3", parent_dir="/m", path="/m/a.mp3")
     assert context.fields == {"bpm": "120", "comment": ""}
+
+
+# --------------------------------------------------- the file name guard
+
+def test_a_rule_can_never_blank_the_file_name():
+    """An empty name is not a valid file, so every route to it is refused."""
+    for rule_type, params in [
+        ("CLEAR", {"field": "filename"}),
+        ("WRITE", {"field": "filename", "value": ""}),
+        ("WRITE", {"field": "filename", "value": "   "}),
+        ("REPLACE", {"field": "filename", "find": "*", "replace": ""}),
+        ("REPLACE", {"field": "filename", "find": "Artist - Title.mp3", "replace": ""}),
+    ]:
+        context = ctx()
+        assert apply(rule_type, params, context) == [], (rule_type, params)
+        assert context.filename == "Artist - Title.mp3", (rule_type, params)
+
+
+def test_copy_from_an_empty_source_cannot_blank_the_file_name():
+    context = ctx(comment="")
+    assert apply("COPY FROM", {"source": "comment", "field": "filename"}, context) == []
+    assert context.filename == "Artist - Title.mp3"
+
+
+def test_parse_filename_cannot_assign_to_a_name_field():
+    """Parsing the file name into the file name is circular, so the rule
+    ignores such an assignment even if a saved preset still carries one."""
+    for target in ("filename", "stem"):
+        context = ctx()
+        assert apply("PARSE FILENAME", {
+            "pattern": "* - *", "assignments": {"1": target},
+        }, context) == [], target
+        assert context.filename == "Artist - Title.mp3", target
+
+    # A real field in the same rule still applies.
+    context = ctx(title="")
+    apply("PARSE FILENAME", {
+        "pattern": "* - *", "assignments": {"1": "filename", "2": "title"},
+    }, context)
+    assert context.filename == "Artist - Title.mp3"
+    assert context.fields["title"] == "Title"
+
+
+def test_renaming_through_the_file_name_field_still_works():
+    """The guard blocks blanking, not renaming."""
+    context = ctx(title="New Name")
+    changes = apply("WRITE", {"field": "filename", "value": "New Name"}, context)
+    assert context.filename == "New Name"
+    assert [c["field"] for c in changes] == ["filename"]
+
+
+def test_registry_marks_the_file_name_as_unblankable():
+    from app.fields import RULE_FIELDS
+
+    by_key = {f["key"]: f for f in RULE_FIELDS}
+    assert by_key["filename"]["must_not_be_empty"] is True
+    assert by_key["title"]["must_not_be_empty"] is False
+
+    # CLEAR must not offer the file name, and PARSE FILENAME must not let a
+    # capture be assigned to either name field.
+    clear_field = next(p for p in REGISTRY["CLEAR"].params if p["name"] == "field")
+    assert "filename" in clear_field["exclude"]
+
+    assignments = next(p for p in REGISTRY["PARSE FILENAME"].params if p["name"] == "assignments")
+    assert set(assignments["exclude"]) == {"filename", "stem"}
+
+    # COPY FROM reads from any field, including the read-only pseudo-fields.
+    source = next(p for p in REGISTRY["COPY FROM"].params if p["name"] == "source")
+    assert source["role"] == "source"

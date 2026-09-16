@@ -1,6 +1,6 @@
 [project]
 name = "mp3metaapi"
-version = "0.1.0"
+version = "1.0.0"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.141.1",
@@ -12,6 +12,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "pyinstaller>=6.22.3",
     "pytest>=9.1.1",
 ]
 

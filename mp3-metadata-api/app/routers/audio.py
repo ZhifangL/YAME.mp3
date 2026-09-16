@@ -12,7 +12,10 @@ from fastapi import APIRouter, HTTPException, Query
 from app.fields import RULE_FIELDS
 from app.schemas import (
     ApplyRequest,
+    ExpandPathsRequest,
+    ExpandPathsResponse,
     ApplyResponse,
+    CoverFromFileRequest,
     CoverWriteRequest,
     FilesResolveRequest,
     FilesResolveResponse,
@@ -38,10 +41,16 @@ from app.services.audio_io import (
     read_track,
     remove_cover,
     write_cover,
+    write_cover_from_file,
     write_fields,
 )
-from app.services.fs_browser import resolve_files, resolve_folder
-from app.services.presets import delete_preset, list_presets, save_preset
+from app.services.fs_browser import expand_paths, resolve_files, resolve_folder
+from app.services.presets import (
+    delete_preset,
+    list_presets,
+    normalise_ruleset,
+    save_preset,
+)
 from app.services.rules import REGISTRY, RuleContext, registry_specs
 
 router = APIRouter(tags=["audio"])
@@ -87,7 +96,7 @@ def read_tracks(request: TracksReadRequest):
     for path in request.paths:
         try:
             tracks.append(read_track(path))
-        except (FileNotFoundError, MetadataError) as exc:
+        except Exception as exc:  # noqa: BLE001 - one bad file must not sink the batch
             errors.append({"path": path, "error": str(exc)})
     return {"tracks": tracks, "errors": errors}
 
@@ -126,6 +135,23 @@ def set_cover(request: CoverWriteRequest):
             warnings = remove_cover(request.path)
         else:
             warnings = write_cover(request.path, request.mime, request.data_base64)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except MetadataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"track": _read_or_none(request.path), "warnings": warnings}
+
+
+@router.post(
+    "/api/tracks/cover-from-file",
+    response_model=TrackWriteResponse,
+    summary="Embed an image that is already on disk as a track's cover art",
+)
+def set_cover_from_file(request: CoverFromFileRequest):
+    """Used by the packaged app: Finder drops and the native image picker hand
+    over a path, so the bytes never have to travel through base64."""
+    try:
+        warnings = write_cover_from_file(request.path, request.image_path)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except MetadataError as exc:
@@ -224,6 +250,20 @@ def resolve_picked_files(request: FilesResolveRequest):
     return {"paths": paths}
 
 
+@router.post(
+    "/api/paths/expand",
+    response_model=ExpandPathsResponse,
+    summary="Flatten a mixed selection of audio files and folders into file paths",
+)
+def expand_selection(request: ExpandPathsRequest):
+    """Used by drag-and-drop, where the OS hands over whatever was selected.
+
+    Folders are walked recursively, loose audio files pass through, and
+    anything else comes back in ``skipped`` so the UI can say what it ignored.
+    """
+    return expand_paths(request.paths)
+
+
 @router.get("/api/presets", response_model=list[PresetModel], tags=["presets"])
 def presets():
     return list_presets()
@@ -243,11 +283,17 @@ def remove_preset(preset_id: str):
 
 @router.post("/api/presets/import", response_model=list[PresetModel], tags=["presets"])
 def import_presets(request: PresetImportRequest):
-    """Import presets from an exported TagForge presets file."""
+    """Import presets from an exported YAME presets file.
+
+    The payload is untrusted (it is a file the user was handed), and a stored
+    preset with the wrong shape would make every later GET /api/presets fail
+    validation — leaving the user unable to even delete it. So it is normalised
+    here, before it ever reaches disk.
+    """
     imported = []
     for entry in request.presets:
         if not isinstance(entry, dict) or not entry.get("name"):
             continue
-        ruleset = entry.get("ruleset") or {"name": entry.get("name"), "rules": []}
+        ruleset = normalise_ruleset(entry.get("ruleset"), str(entry["name"]))
         imported.append(save_preset(str(entry["name"]), ruleset, preset_id=entry.get("id")))
     return imported

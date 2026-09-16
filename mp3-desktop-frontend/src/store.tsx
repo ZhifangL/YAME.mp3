@@ -15,6 +15,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [folderPath, setFolderPath] = useState<string | null>(null)
   const [loadingTracks, setLoadingTracks] = useState(false)
   const [engineError, setEngineError] = useState<string | null>(null)
+  // In the packaged app the Python sidecar takes a moment to come up, so the
+  // first fetch or two are expected to fail. Retry before calling it an error.
+  const [engineStarting, setEngineStarting] = useState(true)
   const [configDir, setConfigDir] = useState<string | null>(null)
 
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
@@ -28,6 +31,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [draft, setDraftState] = useState<BuilderDraft | null>(null)
   const [activePresetId, setActivePresetId] = useState<string | null>(null)
 
+  // Set by both the DOM drag handlers (browser) and the native drop bridge
+  // (packaged app), so the drop hint works the same in both.
+  const [dragOver, setDragOver] = useState(false)
   const [editTrackPath, setEditTrackPath] = useState<string | null>(null)
   const [applyReview, setApplyReview] = useState<ApplyResponse | null>(null)
   const [applying, setApplying] = useState(false)
@@ -44,13 +50,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }, 4200)
   }, [])
 
-  const init = useCallback(() => {
-    api
-      .registry()
-      .then(setRegistry)
-      .catch((err) => {
-        setEngineError(err instanceof Error ? err.message : String(err))
-      })
+  const init = useCallback(async () => {
+    // The engine (a bundled sidecar in the packaged app) may still be starting.
+    const deadline = Date.now() + 30000
+    for (let attempt = 1; ; attempt++) {
+      try {
+        setRegistry(await api.registry())
+        setEngineError(null)
+        setEngineStarting(false)
+        break
+      } catch (err) {
+        if (Date.now() > deadline) {
+          setEngineError(err instanceof Error ? err.message : String(err))
+          setEngineStarting(false)
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, Math.min(250 * attempt, 1500)))
+      }
+    }
     api
       .presets()
       .then(setPresets)
@@ -190,6 +207,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [showToast],
   )
 
+  // Import a mixed selection of files and folders. The engine expands
+  // directories recursively, so drag-and-drop and the native dialog share one
+  // path and always agree on what counts as audio.
+  const importPaths = useCallback(
+    async (paths: string[], mode: 'replace' | 'append') => {
+      if (!paths.length) return
+      let expanded
+      try {
+        expanded = await api.expandPaths(paths)
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : String(err), 'error')
+        return
+      }
+      if (!expanded.files.length) {
+        showToast(expanded.skipped.length ? 'No audio files in that selection' : 'Nothing to import', 'info')
+        return
+      }
+      if (mode === 'replace') await replacePaths(expanded.files)
+      else await appendPaths(expanded.files)
+
+      if (expanded.truncated) showToast('Only the first 20,000 files were imported', 'info')
+      else if (expanded.skipped.length) {
+        showToast(expanded.skipped.length + ' item(s) were not audio and were skipped', 'info')
+      }
+    },
+    [replacePaths, appendPaths, showToast],
+  )
+
   const upsertTrack = useCallback((track: Track) => {
     setTracks((current) => {
       const idx = current.findIndex((t) => t.file.path === track.file.path)
@@ -222,6 +267,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return Array.from(set)
     })
   }, [])
+
+  // Shift-click is an anchor-to-cursor range, so it replaces rather than
+  // unions — otherwise a range could only ever grow.
+  const setSelection = useCallback((paths: string[]) => setSelectedPaths(paths), [])
 
   const clearSelection = useCallback(() => setSelectedPaths([]), [])
 
@@ -262,7 +311,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (next: BuilderDraft | null) => {
       if (next && next.ruleId) {
         const rule = ruleset.rules.find((r) => r.id === next.ruleId)
-        setDraftState({ ...next, originalParams: { ...(rule ? rule.params : next.params) } })
+        setDraftState({
+          ...next,
+          originalParams: { ...(rule ? rule.params : next.params) },
+          originalType: rule ? rule.type : next.type,
+        })
         return
       }
       setDraftState(next)
@@ -298,28 +351,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const cancelDraft = useCallback(() => {
-    if (draft?.ruleId && draft.originalParams) {
-      applyRulePatch(draft.ruleId, { params: draft.originalParams })
+    // Switching the type in the builder patches the rule live, so cancelling
+    // has to put BOTH halves back — restoring only the params would leave the
+    // new rule type holding the old type's inputs.
+    if (draft?.ruleId) {
+      const patch: Partial<RuleInstance> = {}
+      if (draft.originalParams) patch.params = draft.originalParams
+      if (draft.originalType) patch.type = draft.originalType
+      if (Object.keys(patch).length) applyRulePatch(draft.ruleId, patch)
     }
     setDraftState(null)
   }, [draft, applyRulePatch])
-
-  const addRule = useCallback(
-    (type: string) => {
-      if (!registry) return
-      const spec = registry.specs.find((s) => s.type === type)
-      if (!spec) return
-      const rule: RuleInstance = {
-        id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-        type,
-        params: defaultParams(spec.params),
-        enabled: true,
-      }
-      mutateRuleset((rs) => ({ ...rs, rules: [...rs.rules, rule] }))
-      setDraftState({ ruleId: rule.id, type, params: rule.params })
-    },
-    [registry, mutateRuleset],
-  )
 
   const commitDraft = useCallback(() => {
     if (!draft) return
@@ -369,10 +411,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [mutateRuleset],
   )
 
-  const setName = useCallback((name: string) => {
-    setRuleset((current) => ({ ...current, name }))
-  }, [])
-
   const openEdit = useCallback((path: string) => setEditTrackPath(path), [])
   const closeEdit = useCallback(() => setEditTrackPath(null), [])
 
@@ -401,6 +439,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const setCover = useCallback(
     async (path: string, mime: string, dataBase64: string) => {
       const res = await api.setCover(path, mime, dataBase64)
+      if (res.track) upsertTrack(res.track)
+      res.warnings.forEach((w) => showToast(w, 'error'))
+    },
+    [showToast, upsertTrack],
+  )
+
+  // Apply an image that is already on disk as cover art (Finder drop or the
+  // native image picker). Avoids base64 entirely.
+  const setCoverFromFile = useCallback(
+    async (path: string, imagePath: string) => {
+      const res = await api.setCoverFromFile(path, imagePath)
       if (res.track) upsertTrack(res.track)
       res.warnings.forEach((w) => showToast(w, 'error'))
     },
@@ -560,6 +609,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       folderPath,
       loadingTracks,
       engineError,
+      engineStarting,
       configDir,
       selectedPaths,
       search,
@@ -567,18 +617,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       sortDir,
       ruleset,
       draft,
+      dragOver,
       editTrackPath,
       applyReview,
       applying,
       toast,
       init,
-      loadFolder,
       appendPaths,
-      replacePaths,
-      upsertTrack,
+      importPaths,
       removeTrack,
       toggleSelect,
       selectRange,
+      setSelection,
       clearSelection,
       setSearch,
       cycleSort,
@@ -586,16 +636,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateDraftParam,
       updateDraftType,
       cancelDraft,
-      addRule,
       commitDraft,
       removeRule,
       toggleRule,
       reorderRules,
-      setName,
       openEdit,
       closeEdit,
       writeFields,
       setCover,
+      setCoverFromFile,
+      setDragOver,
       removeCover,
       startApply,
       confirmApply,
@@ -607,14 +657,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast,
     }),
     [
-      registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError, configDir,
-      selectedPaths, search, sortKey, sortDir, ruleset, draft, editTrackPath,
+      registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError, engineStarting, configDir,
+      selectedPaths, search, sortKey, sortDir, ruleset, draft, dragOver, editTrackPath,
       applyReview, applying, toast,
-      init, loadFolder, appendPaths, replacePaths, upsertTrack, removeTrack,
-      toggleSelect, selectRange, clearSelection, setSearch, cycleSort,
-      setDraft, updateDraftParam, updateDraftType, cancelDraft, addRule, commitDraft,
-      removeRule, toggleRule, reorderRules, setName, openEdit,
-      closeEdit, writeFields, setCover, removeCover,
+      init, appendPaths, importPaths, removeTrack,
+      toggleSelect, selectRange, setSelection, clearSelection, setSearch, cycleSort,
+      setDraft, updateDraftParam, updateDraftType, cancelDraft, commitDraft,
+      removeRule, toggleRule, reorderRules, openEdit,
+      closeEdit, writeFields, setCover, setCoverFromFile, removeCover,
       startApply, confirmApply, cancelApply, savePreset, loadPreset,
       deletePreset, importPresets, showToast,
     ],

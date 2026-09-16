@@ -84,6 +84,8 @@ class WriteOutcome:
     path: str
     warnings: list[str] = field(default_factory=list)
     renamed: bool = False
+    #: True when the tag write reached disk (or nothing needed writing).
+    saved: bool = False
 
 
 def _load(path: Path):
@@ -110,18 +112,39 @@ def _load(path: Path):
 def _target_name(file_path: Path, requested: str) -> str:
     """File name to use for a requested rename, preserving a usable extension.
 
-    A name that already ends in a known audio suffix is respected verbatim
-    (the user may be deliberately changing the container extension). Anything
-    else keeps the original file's suffix -- including names that merely
-    *contain* a dot, such as "Mr. Brightside", which would otherwise be written
-    with no extension at all and then vanish from folder listings.
+    Two rules keep the file reachable:
+
+    * the extension never changes format. Renaming an MP3 to ".flac" does not
+      convert it — it just makes the file unreadable to this app and to most
+      players, so the real extension wins;
+    * a name that merely *contains* a dot ("Mr. Brightside") keeps the original
+      extension rather than being written with none at all and then vanishing
+      from folder listings.
     """
     name = requested.strip().rstrip(".")
     if not name:
         return file_path.name
-    if Path(name).suffix.lower() in AUDIO_SUFFIXES:
-        return name
+
+    requested_suffix = Path(name).suffix
+    if requested_suffix.lower() in AUDIO_SUFFIXES:
+        if requested_suffix.lower() == file_path.suffix.lower():
+            return name
+        # A different audio extension: drop it and keep the file's own.
+        return name[: -len(requested_suffix)] + file_path.suffix
     return name + file_path.suffix
+
+
+def _is_same_file(a: Path, b: Path) -> bool:
+    """True when two differently-spelled paths are the same file on disk.
+
+    macOS and Windows are case-insensitive, so "ONE.MP3" and "one.mp3" are one
+    file; without this a case-only rename looked like a collision and was
+    silently refused.
+    """
+    try:
+        return a.samefile(b)
+    except OSError:
+        return False
 
 
 def _unsafe_name_reason(name: str) -> Optional[str]:
@@ -152,14 +175,19 @@ class Id3Adapter:
         if not frames:
             return ""
         kind = field.id3_kind
+        # The user's own frame is the one with no description. iTunes and other
+        # taggers park data in *described* COMM frames (iTunNORM, iTunSMPB) and
+        # in per-language USLT frames; those are not the Comment field.
         if kind == "comment":
             for frame in frames:
-                if isinstance(frame, COMM) and getattr(frame, "text", None):
+                if (isinstance(frame, COMM) and not getattr(frame, "desc", "")
+                        and getattr(frame, "text", None)):
                     return " / ".join(str(t) for t in frame.text)
             return ""
         if kind == "lyrics":
             for frame in frames:
-                if isinstance(frame, USLT) and getattr(frame, "text", None):
+                if (isinstance(frame, USLT) and not getattr(frame, "desc", "")
+                        and getattr(frame, "text", None)):
                     return str(frame.text)
             return ""
         parts: list[str] = []
@@ -168,19 +196,35 @@ class Id3Adapter:
                 parts.append(str(value))
         return " / ".join(parts)
 
+    def _drop_plain_frames(self, frame_id: str) -> None:
+        """Delete only the undescribed frames of this type — ours, not theirs.
+
+        A blanket `delall("COMM")` also throws away iTunNORM/iTunSMPB, which
+        hold gapless-playback and normalisation data that cannot be recovered.
+        """
+        for key in list(self.id3.keys()):
+            if key != frame_id and not key.startswith(frame_id + ":"):
+                continue
+            frame = self.id3.get(key)
+            if frame is not None and not getattr(frame, "desc", ""):
+                del self.id3[key]
+
     def set(self, field, value: str) -> None:
         if field.id3 is None:
             return
         frame_id = field.id3
+        kind = field.id3_kind or "text"
+        if kind in ("comment", "lyrics"):
+            self._drop_plain_frames(frame_id)
+            if not value:
+                return
+            if kind == "comment":
+                self.id3.add(COMM(encoding=ID3_ENCODING, lang="eng", desc="", text=[value]))
+            else:
+                self.id3.add(USLT(encoding=ID3_ENCODING, lang="eng", desc="", text=value))
+            return
         self.id3.delall(frame_id)
         if not value:
-            return
-        kind = field.id3_kind or "text"
-        if kind == "comment":
-            self.id3.add(COMM(encoding=ID3_ENCODING, lang="eng", desc="", text=[value]))
-            return
-        if kind == "lyrics":
-            self.id3.add(USLT(encoding=ID3_ENCODING, lang="eng", desc="", text=value))
             return
         cls = Frames.get(frame_id)
         if cls is None:
@@ -287,6 +331,20 @@ class VorbisAdapter:
     def __init__(self, fileobj):
         self.fileobj = fileobj
 
+    def _tags(self):
+        """The comment block, created on demand.
+
+        A FLAC or Ogg stream can legitimately carry no VORBIS_COMMENT block;
+        without this the write silently did nothing while still reporting
+        success. ID3 and MP4 already create their containers lazily.
+        """
+        if self.fileobj.tags is None:
+            try:
+                self.fileobj.add_tags()
+            except Exception:
+                return None
+        return self.fileobj.tags
+
     def get(self, field) -> str:
         if field.vorbis is None or self.fileobj.tags is None:
             return ""
@@ -298,12 +356,15 @@ class VorbisAdapter:
         return str(value)
 
     def set(self, field, value: str) -> None:
-        if field.vorbis is None or self.fileobj.tags is None:
+        if field.vorbis is None:
+            return
+        tags = self._tags()
+        if tags is None:
             return
         if not value:
-            self.fileobj.tags.pop(field.vorbis, None)
+            tags.pop(field.vorbis, None)
         else:
-            self.fileobj.tags[field.vorbis] = value
+            tags[field.vorbis] = value
 
     def cover(self) -> Optional[tuple[str, bytes]]:
         if isinstance(self.fileobj, mutagen.flac.FLAC):
@@ -346,7 +407,8 @@ class VorbisAdapter:
             self.fileobj.add_picture(picture)
             return
         # OGG / Opus: write the FLAC-picture block into a Vorbis comment.
-        if self.fileobj.tags is None:
+        tags = self._tags()
+        if tags is None:
             return
         picture = mutagen.flac.Picture()
         picture.type = 3
@@ -355,7 +417,7 @@ class VorbisAdapter:
         picture.data = data
         import base64 as _b64
 
-        self.fileobj.tags["metadata_block_picture"] = [_b64.b64encode(picture.write()).decode("ascii")]
+        tags["metadata_block_picture"] = [_b64.b64encode(picture.write()).decode("ascii")]
 
     def remove_cover(self) -> None:
         if isinstance(self.fileobj, mutagen.flac.FLAC):
@@ -414,9 +476,11 @@ class ApeAdapter:
 
 
 class AsfAdapter:
-    """WMA/ASF - mutagen can read but not write these tags."""
+    """WMA/ASF - mutagen can read but not write these tags.
 
-    writable = False
+    Read-only-ness is decided by ``_detect``'s save_kind, not by a flag here,
+    because the no-op mutators below make ``hasattr`` checks lie.
+    """
 
     def __init__(self, fileobj):
         self.fileobj = fileobj
@@ -572,7 +636,8 @@ def _audio_info(fileobj, warnings: list[str]) -> dict:
         out["codec_detail"] = None
     elif isinstance(fileobj, mutagen.flac.FLAC):
         out["codec"] = "FLAC"
-        out["codec_detail"] = str(getattr(info, "bits_per_sample", "") or "") + "-bit" or None
+        bits = getattr(info, "bits_per_sample", None)
+        out["codec_detail"] = f"{bits}-bit" if bits else None
     elif isinstance(fileobj, mutagen.oggvorbis.OggVorbis):
         out["codec"] = "Vorbis"
     elif isinstance(fileobj, mutagen.oggopus.OggOpus):
@@ -665,20 +730,31 @@ def write_fields(path: str, fields: dict[str, str], rename_to: Optional[str] = N
             except Exception as exc:
                 warnings.append("Could not write " + f.label + ": " + str(exc))
 
-    if save_kind in ("id3", "mp4", "vorbis", "ape") and fields:
+    saved = True
+    if save_kind not in ("id3", "mp4", "vorbis", "ape"):
+        saved = False
+    elif fields:
         try:
             _save_file(fileobj, save_kind)
         except Exception as exc:
             warnings.append("Could not save tags: " + str(exc))
+            saved = False
 
     final_path = file_path
     if rename_to and rename_to.strip() != file_path.name:
-        new_name = _target_name(file_path, rename_to)
+        requested = rename_to.strip()
+        new_name = _target_name(file_path, requested)
         reason = _unsafe_name_reason(new_name)
         target = file_path.parent / new_name
+        requested_suffix = Path(requested).suffix.lower()
+        if requested_suffix in AUDIO_SUFFIXES and requested_suffix != file_path.suffix.lower():
+            warnings.append(
+                "Kept the original extension (" + file_path.suffix +
+                "); renaming does not convert formats."
+            )
         if reason is not None:
             warnings.append("Rename skipped: " + reason + ".")
-        elif target.exists() and target != file_path:
+        elif target.exists() and target != file_path and not _is_same_file(target, file_path):
             warnings.append("Rename skipped: " + new_name + " already exists.")
         else:
             try:
@@ -687,7 +763,12 @@ def write_fields(path: str, fields: dict[str, str], rename_to: Optional[str] = N
             except OSError as exc:
                 warnings.append("Rename failed: " + str(exc))
 
-    return WriteOutcome(path=str(final_path), warnings=warnings, renamed=final_path != file_path)
+    return WriteOutcome(
+        path=str(final_path),
+        warnings=warnings,
+        renamed=final_path != file_path,
+        saved=saved,
+    )
 
 
 def write_cover(path: str, mime: str, data_base64: str) -> list[str]:
@@ -703,7 +784,7 @@ def write_cover(path: str, mime: str, data_base64: str) -> list[str]:
     fileobj = _load(file_path)
     adapter, save_kind = _detect(fileobj)
     warnings: list[str] = []
-    if adapter is None or not hasattr(adapter, "set_cover"):
+    if adapter is None or save_kind not in ("id3", "mp4", "vorbis", "ape"):
         warnings.append("Format is read-only; cover was not written.")
         return warnings
     try:
@@ -720,7 +801,7 @@ def remove_cover(path: str) -> list[str]:
     fileobj = _load(file_path)
     adapter, save_kind = _detect(fileobj)
     warnings: list[str] = []
-    if adapter is None or not hasattr(adapter, "remove_cover"):
+    if adapter is None or save_kind not in ("id3", "mp4", "vorbis", "ape"):
         warnings.append("Format is read-only; cover was not removed.")
         return warnings
     try:
@@ -731,10 +812,61 @@ def remove_cover(path: str) -> list[str]:
     return warnings
 
 
+# Cover images that arrive as a path on disk (a Finder drop or the native file
+# picker) rather than as base64 from a browser file input.
+_IMAGE_MIMES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+}
+
+
+def image_mime_for(path: Path) -> Optional[str]:
+    """MIME type for an image file, or None when the extension is not one."""
+    return _IMAGE_MIMES.get(path.suffix.lower())
+
+
+def write_cover_from_file(path: str, image_path: str) -> list[str]:
+    """Embed an image that is already on disk as the cover of one audio file.
+
+    Saves the client a base64 round-trip and lets a dropped Finder file be used
+    directly as artwork.
+
+    Raises:
+        FileNotFoundError: the audio file or the image is missing.
+        MetadataError: the image is not a supported type or is too large.
+    """
+    image = Path(image_path).expanduser()
+    if not image.exists() or not image.is_file():
+        raise FileNotFoundError("Cover image does not exist: " + str(image))
+    mime = image_mime_for(image)
+    if mime is None:
+        raise MetadataError(
+            "Unsupported cover image type: " + (image.suffix or "(none)") +
+            ". Use PNG, JPEG, WebP, GIF, BMP or TIFF."
+        )
+    try:
+        size = image.stat().st_size
+    except OSError as exc:
+        raise MetadataError("Could not read the cover image: " + str(exc)) from exc
+    # Check before reading: a huge TIFF should never be loaded just to be
+    # rejected by write_cover's limit.
+    if size > 10 * 1024 * 1024:
+        raise MetadataError("Cover image is larger than 10 MB.")
+    try:
+        data = base64.b64encode(image.read_bytes()).decode("ascii")
+    except OSError as exc:
+        raise MetadataError("Could not read the cover image: " + str(exc)) from exc
+    return write_cover(path, mime, data)
+
+
 def apply_ruleset(paths: list[str], ruleset: dict, dry_run: bool) -> dict:
     """Run a ruleset over many files. dry_run=True only computes changes."""
-    from app.services.rules import RuleContext, run_ruleset
-
     results: list[dict] = []
     for path in paths:
         try:
@@ -831,10 +963,14 @@ def _apply_to_file(path: str, ruleset: dict, dry_run: bool) -> dict:
         # applied to wherever the file ended up -- not to the original path,
         # which may no longer exist once the rename has gone through.
         target_path = path
+        saved = True
         if write_changes or rename:
             outcome = write_fields(path, write_changes, rename_to=new_filename if rename else None)
             warnings.extend(outcome.warnings)
             target_path = outcome.path
+            # A read-only format or a failed save must not be reported as a
+            # successful write, or the UI says "applied" for a no-op.
+            saved = outcome.saved
             # A refused rename (name taken, OS error) leaves the file put:
             # report the name it actually has so the UI never moves the row.
             final_filename = Path(outcome.path).name
@@ -842,12 +978,15 @@ def _apply_to_file(path: str, ruleset: dict, dry_run: bool) -> dict:
             if cover_action.get("after") == "remove":
                 warnings.extend(remove_cover(target_path))
             else:
-                warnings.extend(write_cover(
+                cover_warnings = write_cover(
                     target_path,
                     cover_action.get("_mime") or "image/jpeg",
                     cover_action.get("_data_base64") or "",
-                ))
-        written = True
+                )
+                warnings.extend(cover_warnings)
+                if cover_warnings:
+                    saved = False
+        written = saved
 
     return {
         "path": path,

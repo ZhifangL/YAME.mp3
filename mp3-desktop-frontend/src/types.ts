@@ -63,6 +63,10 @@ export interface RuleParamSpec {
   help: string | null
   /** The rule cannot be committed until this param is filled in. */
   required: boolean
+  /** Field keys this picker must not offer (e.g. the circular file name). */
+  exclude: string[]
+  /** 'target' offers writable fields only; 'source' also allows read-only ones. */
+  role: 'target' | 'source'
 }
 
 export interface RuleSpec {
@@ -78,6 +82,8 @@ export interface RuleField {
   kind: string
   pseudo: boolean
   writable: boolean
+  /** True for fields that must never be blanked, such as the file name. */
+  must_not_be_empty: boolean
 }
 
 export interface RegistryResponse {

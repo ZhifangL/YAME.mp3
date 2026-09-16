@@ -131,8 +131,8 @@ export function EditTrackOverlay() {
       showToast('Cover image is larger than 10 MB', 'error')
       return
     }
-    const image = await readImageFile(file)
     try {
+      const image = await readImageFile(file)
       await setCover(track.file.path, image.mime, image.data_base64)
       setCoverMenuOpen(false)
       showToast('Cover art updated', 'success')
@@ -232,6 +232,7 @@ export function EditTrackOverlay() {
             <div className="edit-cover- col">
               <div
                 className="cover-box-wrap"
+                data-cover-drop="edit"
                 onDragOver={(e) => {
                   const has = Array.from(e.dataTransfer?.items ?? []).some((i) => i.type.startsWith('image/'))
                   if (has) e.preventDefault()

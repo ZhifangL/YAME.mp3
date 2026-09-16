@@ -4,9 +4,15 @@ import { useStore } from './store-context'
 
 import { takePendingMode } from './pickers-helpers'
 
-// Mounted once in App; renders the hidden native folder input.
+/**
+ * Browser-dev fallback for the native picker: a hidden folder input.
+ *
+ * Browsers hide absolute paths, so the picked folder is re-located on disk by
+ * name + relative entries (see the engine's /api/resolve-folder). The packaged
+ * app never uses this — it passes paths straight from the OS dialog.
+ */
 export function PickerInputs() {
-  const { folderPath, appendPaths, replacePaths, showToast } = useStore()
+  const { folderPath, importPaths, showToast } = useStore()
 
   const onFolder = async (e: ChangeEvent<HTMLInputElement>) => {
     const mode = takePendingMode()
@@ -27,24 +33,18 @@ export function PickerInputs() {
         return
       }
       // Import every audio file in the folder, including sub-folders.
-      const browse = await api.browse(res.path, true)
-      if (!browse.audio_files.length) {
-        showToast('No audio files in this folder', 'info')
-        return
-      }
-      const paths = browse.audio_files.map((f) => f.path)
-      if (mode === 'replace') await replacePaths(paths)
-      else await appendPaths(paths)
+      await importPaths([res.path], mode)
     } catch {
       showToast('Could not locate the selected folder on disk', 'error')
     }
   }
 
+  // Browser-only fallback for the native picker.
   const folderAttrs = { webkitdirectory: '', directory: '' } as Record<string, string>
 
   return (
     <input
-      id="tf-picker-folder"
+      id="yame-picker-folder"
       type="file"
       {...folderAttrs}
       style={{ display: 'none' }}

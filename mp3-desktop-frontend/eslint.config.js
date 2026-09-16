@@ -6,7 +6,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // Build output: the Vite bundle and everything Cargo/tauri-build generates
+  // (which includes emitted JS assets we do not own).
+  globalIgnores(['dist', 'src-tauri/target', 'src-tauri/gen', 'src-tauri/binaries']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

@@ -5,8 +5,10 @@ export function ApplyReviewModal() {
   if (!applyReview) return null
 
   const changed = applyReview.results.filter((r) => r.changes.length > 0)
-  const unchanged = applyReview.results.length - changed.length
   const errors = applyReview.results.filter((r) => r.error)
+  // Files that failed to read were not "left unchanged by the rules" — they
+  // are reported as errors above, so they must not be counted here too.
+  const unchanged = applyReview.results.filter((r) => !r.error && r.changes.length === 0).length
   // Nothing to review at all: the empty-state message stands on its own, so the
   // "N files left unchanged" tally underneath it would just be noise.
   const nothingToDo = changed.length === 0 && errors.length === 0

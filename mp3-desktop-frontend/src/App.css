@@ -1,5 +1,5 @@
 /* ================================================================
-   TagForge application styles (consolidated).
+   YAME application styles (consolidated).
    Layout mirrors the Penpot board: titlebar / rules sidebar / track
    table / floating detail panel / status footer.
    ================================================================ */
@@ -42,11 +42,12 @@
   -webkit-app-region: drag;
 }
 
-/* Packaged app: the window is drawn by macOS, so the native traffic lights
-   sit inside this bar and the wordmark has to clear them. `applyHostClass()`
-   adds .host-tauri to <html> only inside the Tauri webview. */
+/* Packaged app: macOS draws the traffic lights inside this bar, so the row
+   starts after them — same line, same height, just indented. The lights end
+   around x=72; 96px leaves a comfortable gap. `applyHostClass()` adds
+   .host-tauri to <html> only inside the Tauri webview. */
 .host-tauri .titlebar {
-  padding-left: 84px;
+  padding-left: 96px;
 }
 
 .wordmark {
@@ -699,7 +700,14 @@ table.tracks {
   left: 0;
   z-index: 7;
   flex: none;
-  box-shadow: 1px 0 0 var(--border-subtle);
+}
+
+/* The frozen/main divider is drawn per cell rather than as one shadow on the
+   table, so it can take the colour of the row it runs past — otherwise a grey
+   line cuts through a selected row. */
+.tracks.frozen-pane th:last-child,
+.tracks.frozen-pane td:last-child {
+  border-right: 1px solid var(--border-subtle);
 }
 
 .tracks.main-pane { flex: none; }
@@ -740,11 +748,20 @@ table.tracks {
   background: var(--purple-accent);
 }
 
+.tracks.frozen-pane tbody tr.selected td:last-child {
+  border-right-color: var(--purple-accent);
+}
+
 .tracks.frozen-pane tbody tr.selected.hover td,
 .tracks.frozen-pane tbody tr.selected:hover td,
 .tracks tbody tr.selected.hover td,
 .tracks tbody tr.selected:hover td {
   background: var(--purple-primary);
+}
+
+.tracks.frozen-pane tbody tr.selected.hover td:last-child,
+.tracks.frozen-pane tbody tr.selected:hover td:last-child {
+  border-right-color: var(--purple-primary);
 }
 
 .tracks.frozen-pane tbody tr.hover:not(.selected) td,
@@ -1622,12 +1639,16 @@ table.tracks {
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
-  background: var(--text-main);
-  color: var(--text-inverse);
+  /* Neutral by default so the message reads as part of the app chrome rather
+     than as an alert; only failures shout. */
+  background: var(--surface-3);
+  color: var(--text-main);
+  border: 1px solid var(--border-strong);
   font-size: 12.5px;
+  font-weight: 500;
   padding: 9px 16px;
   border-radius: 99px;
-  box-shadow: var(--shadow-modal);
+  box-shadow: var(--shadow-panel);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1635,9 +1656,13 @@ table.tracks {
   max-width: 70vw;
 }
 
-.toast.success { background: #15803d; }
+.toast.success { background: var(--surface-3); }
 
-.toast.error { background: var(--danger); }
+.toast.error {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--text-inverse);
+}
 
 @keyframes toast-in {
   from { opacity: 0; transform: translate(-50%, 6px); }

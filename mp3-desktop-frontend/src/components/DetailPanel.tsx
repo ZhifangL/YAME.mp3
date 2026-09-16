@@ -5,7 +5,7 @@ import { readImageFile } from '../utils'
 import { MusicArt } from './MusicArt'
 
 export function DetailPanel() {
-  const { tracks, selectedPaths, writeFields, setCover, showToast, openEdit } = useStore()
+  const { tracks, selectedPaths, editTrackPath, writeFields, setCover, showToast, openEdit } = useStore()
   const track = tracks.find((t) => selectedPaths.includes(t.file.path)) ?? null
   const [collapsed, setCollapsed] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -28,8 +28,8 @@ export function DetailPanel() {
         showToast('Cover image is larger than 10 MB', 'error')
         return
       }
-      const image = await readImageFile(file)
       try {
+        const image = await readImageFile(file)
         await setCover(track.file.path, image.mime, image.data_base64)
         showToast('Cover art updated', 'success')
       } catch (err) {
@@ -41,10 +41,15 @@ export function DetailPanel() {
 
   // Paste an image anywhere (outside text inputs) to set the selected
   // track's cover — works even when the panel itself is not focused.
+  //
+  // Skipped while the edit window is open: it registers its own paste handler
+  // for the track it is editing, and letting both run wrote artwork twice, to
+  // two different files.
   useEffect(() => {
     const onWindowPaste = (e: ClipboardEvent) => {
       const target = e.target as HTMLElement
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
+      if (editTrackPath) return
       if (!track) return
       const items = Array.from(e.clipboardData?.items ?? [])
       const image = items.find((i) => i.type.startsWith('image/'))
@@ -55,7 +60,7 @@ export function DetailPanel() {
     }
     window.addEventListener('paste', onWindowPaste)
     return () => window.removeEventListener('paste', onWindowPaste)
-  }, [track, pickCover])
+  }, [track, pickCover, editTrackPath])
 
   // Hidden entirely until music has been added to the trackview.
   if (!tracks.length) return null
@@ -102,6 +107,7 @@ export function DetailPanel() {
   return (
     <div
       className={'detail-panel' + (track ? '' : ' empty')}
+      data-cover-drop="detail"
       onPaste={onPaste}
       onDragOver={(e) => { if (track) e.preventDefault() }}
       onDrop={onDrop}

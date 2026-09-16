@@ -28,7 +28,9 @@ export interface BuilderDraft {
   ruleId: string | null
   type: string
   params: Record<string, unknown>
+  /** Snapshot taken when editing started, so Cancel can undo both. */
   originalParams?: Record<string, unknown>
+  originalType?: string
 }
 
 export interface ToastState {
@@ -45,6 +47,8 @@ export interface Store {
   folderPath: string | null
   loadingTracks: boolean
   engineError: string | null
+  /** True until the engine has answered for the first time. */
+  engineStarting: boolean
   /** Where the engine keeps presets + the port file (display only). */
   configDir: string | null
 
@@ -56,20 +60,24 @@ export interface Store {
   ruleset: Ruleset
   draft: BuilderDraft | null
 
+  /** True while a file drag is over the window (DOM or native). */
+  dragOver: boolean
+  setDragOver: (value: boolean) => void
   editTrackPath: string | null
   applyReview: ApplyResponse | null
   applying: boolean
   toast: ToastState | null
 
   init: () => void
-  loadFolder: (folderPath: string, paths?: string[]) => void
   appendPaths: (paths: string[]) => Promise<void>
-  replacePaths: (paths: string[]) => Promise<void>
-  upsertTrack: (track: Track) => void
+  /** Import a mixed selection of audio files and folders (expanded by the engine). */
+  importPaths: (paths: string[], mode: 'replace' | 'append') => Promise<void>
   removeTrack: (path: string) => void
 
   toggleSelect: (path: string, additive: boolean) => void
   selectRange: (paths: string[]) => void
+  /** Replace the selection outright (shift-click, which may shrink it). */
+  setSelection: (paths: string[]) => void
   clearSelection: () => void
   setSearch: (value: string) => void
   cycleSort: (key: SortKey) => void
@@ -78,18 +86,17 @@ export interface Store {
   updateDraftParam: (name: string, value: unknown) => void
   updateDraftType: (type: string) => void
   cancelDraft: () => void
-  addRule: (type: string) => void
   commitDraft: () => void
   removeRule: (id: string) => void
   toggleRule: (id: string) => void
   reorderRules: (dragId: string, targetId: string) => void
-  setName: (name: string) => void
 
   openEdit: (path: string) => void
   closeEdit: () => void
 
   writeFields: (path: string, fields: Record<string, string>, renameTo?: string | null) => Promise<string[]>
   setCover: (path: string, mime: string, dataBase64: string) => Promise<void>
+  setCoverFromFile: (path: string, imagePath: string) => Promise<void>
   removeCover: (path: string) => Promise<void>
 
   startApply: () => Promise<void>

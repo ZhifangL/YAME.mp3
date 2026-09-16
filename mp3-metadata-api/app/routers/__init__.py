@@ -1,1 +1,1 @@
-"""API routers for Mp3MetaApi."""
+"""API routers for the YAME engine."""

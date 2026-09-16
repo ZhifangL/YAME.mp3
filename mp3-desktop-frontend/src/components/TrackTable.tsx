@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { copyFiles, openWithChooser, openWithDefault, pasteFiles, revealInFinder } from '../desktop'
+import { copyFiles, openWithDefault, pasteFiles, revealInFinder } from '../desktop'
 import { pickMusic } from '../pickers-helpers'
+import { invoke } from '../tauri'
+import { useMenuEvents } from '../useMenuEvents'
 import { useStore, type SortKey } from '../store-context'
 import type { Track } from '../types'
 import { formatDuration, formatSize, yearOf } from '../utils'
@@ -54,13 +56,16 @@ interface ColumnState {
   widths: Record<string, number>
 }
 
-const COLUMN_STATE_KEY = 'tagforge.columns.v1'
+const COLUMN_STATE_KEY = 'yame.columns.v1'
+// The app shipped as "TagForge" before the rebrand; read the old key once so
+// an existing column layout is not thrown away.
+const LEGACY_COLUMN_STATE_KEY = 'tagforge.columns.v1'
 const DEFAULT_ORDER = ALL_COLUMNS.map((c) => c.key)
 
 function loadColumnState(): ColumnState {
   const state: ColumnState = { order: [...DEFAULT_ORDER], frozen: ['filename'], hidden: [], widths: { ...DEFAULT_WIDTHS } }
   try {
-    const raw = localStorage.getItem(COLUMN_STATE_KEY)
+    const raw = localStorage.getItem(COLUMN_STATE_KEY) ?? localStorage.getItem(LEGACY_COLUMN_STATE_KEY)
     if (!raw) return state
     const parsed = JSON.parse(raw) as Partial<ColumnState>
     const valid = (k: string): k is SortKey => ALL_BY_KEY.has(k as SortKey)
@@ -108,27 +113,38 @@ export function TrackTable() {
     tracks,
     loadingTracks,
     engineError,
+    engineStarting,
     selectedPaths,
     search,
     sortKey,
     sortDir,
+    dragOver,
+    setDragOver,
     registry,
     toggleSelect,
     selectRange,
+    setSelection,
     clearSelection,
     openEdit,
     removeTrack,
     folderPath,
     appendPaths,
-    replacePaths,
+    importPaths,
     showToast,
   } = useStore()
   const lastIndex = useRef<number | null>(null)
+  // Kept in refs so the global key handler needs no re-binding on every data
+  // change, and never sees a stale list.
+  const visibleRef = useRef<Track[]>([])
+  const selectionRef = useRef<string[]>([])
   const [colState, setColState] = useState<ColumnState>(loadColumnState)
   const [freezeMenu, setFreezeMenu] = useState<FreezeMenu | null>(null)
   const [rowMenu, setRowMenu] = useState<RowMenu | null>(null)
   const [hoveredPath, setHoveredPath] = useState<string | null>(null)
-  const [dragOver, setDragOver] = useState(false)
+  // Which header the native column menu belongs to (it reports only an id).
+  const menuColumnRef = useRef<SortKey | null>(null)
+  // Which row the native track menu was opened on (it reports only an id).
+  const menuRowRef = useRef<string | null>(null)
 
   // Persist column layout (order, freeze, visibility, widths) across sessions.
   useEffect(() => {
@@ -158,19 +174,109 @@ export function TrackTable() {
     }
   }, [freezeMenu, rowMenu])
 
-  // Ctrl/Cmd+A selects every track.
+  // The Edit menu's Copy/Paste are real macOS menu items, so their Cmd+C /
+  // Cmd+V accelerators are handled by AppKit before any keydown reaches us.
+  // Implementing the DOM copy/paste events is therefore the correct place to
+  // hook: it also routes by focus, exactly like Finder — text fields keep
+  // their own copy/paste, the track list copies files.
+  useEffect(() => {
+    const inTextField = () => {
+      const el = document.activeElement
+      return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
+    }
+    const onCopy = (e: ClipboardEvent) => {
+      if (inTextField() || !selectionRef.current.length) return
+      e.preventDefault()
+      const chosen = selectionRef.current
+      void copyFiles(chosen)
+        .then(() =>
+          showToast('Copied ' + chosen.length + ' song' + (chosen.length === 1 ? '' : 's'), 'success'),
+        )
+        .catch((err) => showToast(err instanceof Error ? err.message : String(err), 'error'))
+    }
+    const onPaste = (e: ClipboardEvent) => {
+      if (inTextField()) return
+      // An image on the clipboard is cover art for whichever panel handles it,
+      // never a track import — without this the same Cmd+V would also try to
+      // import files and report "no audio in that selection".
+      const hasImage = Array.from(e.clipboardData?.items ?? []).some((i) =>
+        i.type.startsWith('image/'),
+      )
+      if (hasImage) return
+      // Reading the clipboard is async, so the default action is left alone;
+      // in a non-editable area it does nothing anyway.
+      void pasteFiles(folderPath)
+        .then(async (paths) => {
+          if (paths.length) await importPaths(paths, 'append')
+        })
+        .catch((err) => showToast(err instanceof Error ? err.message : String(err), 'error'))
+    }
+    document.addEventListener('copy', onCopy)
+    document.addEventListener('paste', onPaste)
+    return () => {
+      document.removeEventListener('copy', onCopy)
+      document.removeEventListener('paste', onPaste)
+    }
+  }, [folderPath, importPaths, showToast])
+
+  // Keyboard: Cmd+A / Cmd+C / Cmd+V, and up/down to walk the list — the
+  // shortcuts a Mac user reaches for without thinking.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== 'a' || !(e.metaKey || e.ctrlKey)) return
       const target = e.target as HTMLElement
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
-      e.preventDefault()
-      clearSelection()
-      selectRange(tracks.map((t) => t.file.path))
+      const mod = e.metaKey || e.ctrlKey
+
+      if (mod && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        clearSelection()
+        selectRange(visibleRef.current.map((t) => t.file.path))
+        return
+      }
+      if (mod && e.key.toLowerCase() === 'c') {
+        const chosen = selectionRef.current
+        if (!chosen.length) return
+        e.preventDefault()
+        void copyFiles(chosen)
+          .then(() =>
+            showToast('Copied ' + chosen.length + ' song' + (chosen.length === 1 ? '' : 's'), 'success'),
+          )
+          .catch((err) => showToast(err instanceof Error ? err.message : String(err), 'error'))
+        return
+      }
+      if (mod && e.key.toLowerCase() === 'v') {
+        e.preventDefault()
+        void pasteFiles(folderPath)
+          .then(async (paths) => {
+            if (paths.length) await importPaths(paths, 'append')
+            else showToast('No audio files on the clipboard', 'info')
+          })
+          .catch(() => showToast('Could not read the clipboard', 'error'))
+        return
+      }
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const list = visibleRef.current
+        if (!list.length) return
+        e.preventDefault()
+        const current = selectionRef.current
+        const anchor = current.length ? list.findIndex((t) => t.file.path === current[current.length - 1]) : -1
+        const next =
+          anchor === -1
+            ? e.key === 'ArrowDown'
+              ? 0
+              : list.length - 1
+            : Math.min(list.length - 1, Math.max(0, anchor + (e.key === 'ArrowDown' ? 1 : -1)))
+        const path = list[next].file.path
+        clearSelection()
+        selectRange([path])
+        lastIndex.current = next
+        document.querySelector(`tr[data-path="${CSS.escape(path)}"]`)?.scrollIntoView({ block: 'nearest' })
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [tracks, clearSelection, selectRange])
+  }, [clearSelection, selectRange, folderPath, importPaths, showToast])
 
   const frozenSet = new Set(colState.frozen)
   const hiddenSet = new Set(colState.hidden)
@@ -196,6 +302,26 @@ export function TrackTable() {
       hidden: cur.hidden.includes(key) ? cur.hidden.filter((k) => k !== key) : [...cur.hidden, key],
     }))
   }
+
+  const handleColumnMenu = (id: string): boolean => {
+    if (id === 'col.freeze') {
+      if (menuColumnRef.current) toggleFreeze(menuColumnRef.current)
+      return true
+    }
+    if (id.startsWith('col.toggle:')) {
+      toggleHidden(id.slice('col.toggle:'.length) as SortKey)
+      return true
+    }
+    return false
+  }
+
+  // Native menu ids for this table (freeze / show-hide columns).
+  useMenuEvents(
+    handleColumnMenu,
+    () => (document.getElementById('yame-search') as HTMLInputElement | null)?.focus(),
+    menuRowRef,
+  )
+
 
   // Move a column within its pane (frozen ↔ frozen, unfrozen ↔ unfrozen),
   // inserting before or after the target column.
@@ -371,12 +497,18 @@ export function TrackTable() {
     })
   }, [tracks, search, sortKey, sortDir, columns])
 
+  // Kept current for the global key handler, which is bound once.
+  useEffect(() => {
+    visibleRef.current = visible
+    selectionRef.current = selectedPaths
+  })
+
   const handleClick = (e: React.MouseEvent, track: Track, index: number) => {
     const additive = e.metaKey || e.ctrlKey
     if (e.shiftKey && lastIndex.current != null && !additive) {
       const start = Math.min(lastIndex.current, index)
       const end = Math.max(lastIndex.current, index)
-      selectRange(visible.slice(start, end + 1).map((t) => t.file.path))
+      setSelection(visible.slice(start, end + 1).map((t) => t.file.path))
       return
     }
     toggleSelect(track.file.path, additive)
@@ -389,7 +521,22 @@ export function TrackTable() {
       clearSelection()
       selectRange([path])
     }
-    setRowMenu({ x: e.clientX, y: e.clientY, path })
+    // The row under the cursor is now the selection, which is what the native
+    // menu acts on. `true` means Rust showed a real NSMenu; anything else
+    // (no Tauri, or the call failed) means we draw the DOM fallback — and only
+    // ever one of the two.
+    menuRowRef.current = path
+    const count = selectedPaths.includes(path) ? selectedPaths.length : 1
+    void invoke<boolean>('show_track_menu', {
+      path,
+      x: e.clientX,
+      y: e.clientY,
+      selectionCount: count,
+    })
+      .then((handled) => {
+        if (handled !== true) setRowMenu({ x: e.clientX, y: e.clientY, path })
+      })
+      .catch(() => setRowMenu({ x: e.clientX, y: e.clientY, path }))
   }
 
   const rowAction = async (action: string) => {
@@ -402,8 +549,7 @@ export function TrackTable() {
           await openWithDefault(path)
           break
         case 'open-with':
-          await openWithChooser(path)
-          break
+          throw new Error('"Open with…" is available in the packaged YAME app')
         case 'copy':
           await copyFiles(selectedPaths.includes(path) && selectedPaths.length > 1 ? selectedPaths : [path])
           showToast('Copied ' + (selectedPaths.length > 1 ? selectedPaths.length + ' files' : 'file') + ' to the clipboard', 'success')
@@ -436,47 +582,57 @@ export function TrackTable() {
 
   const onDragLeave = () => setDragOver(false)
 
+  // Browser-dev drop handling. In the packaged app the webview never receives
+  // these events for files (Tauri intercepts them and hands real paths to
+  // useNativeFileDrop), so this path exists purely for `pnpm run dev`.
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
     const suffixes = new Set(registry?.audio_suffixes?.length ? registry.audio_suffixes : FALLBACK_AUDIO_EXTENSIONS)
     const items = Array.from(e.dataTransfer?.items ?? [])
     const names: string[] = []
-    let folderPick: { name: string; entries: string[] } | null = null
+    const folders: { name: string; entries: string[] }[] = []
     for (const item of items) {
       if (item.kind !== 'file') continue
       const entry = (item as unknown as { webkitGetAsEntry?: () => FileSystemEntry | null }).webkitGetAsEntry?.()
       if (entry && entry.isDirectory) {
-        if (!folderPick) folderPick = await readDirEntries(entry as FileSystemDirectoryEntry)
+        folders.push(await readDirEntries(entry as FileSystemDirectoryEntry))
       } else {
         const file = item.getAsFile()
         if (file && isAudioFile(file.name, suffixes)) names.push(file.name)
       }
     }
-    if (folderPick) {
-      try {
-        const res = await api.resolveFolder(folderPick.name, folderPick.entries, folderPath)
-        if (res.path) {
-          const browse = await api.browse(res.path, true)
-          if (browse.audio_files.length) await replacePaths(browse.audio_files.map((f) => f.path))
-          else showToast('No audio files in that folder', 'info')
-        } else {
+
+    // Browsers hide absolute paths, so a dropped folder or file is re-located
+    // on disk by name; the engine then expands whatever we found.
+    const resolved: string[] = []
+    try {
+      if (folders.length) {
+        const found = await Promise.all(
+          folders.map((folder) => api.resolveFolder(folder.name, folder.entries, folderPath)),
+        )
+        const paths = found.map((f) => f.path).filter((p): p is string => Boolean(p))
+        if (!paths.length) {
           showToast('Could not locate the dropped folder on disk', 'error')
+          return
         }
-      } catch {
-        showToast('Could not locate the dropped folder on disk', 'error')
+        resolved.push(...paths)
       }
-    } else if (names.length) {
-      try {
+      if (names.length) {
         const res = await api.resolveFiles(names, folderPath)
-        if (res.paths.length) await replacePaths(res.paths)
         const missing = names.length - res.paths.length
         if (missing > 0) showToast(missing + ' file(s) could not be located', 'error')
-        if (!res.paths.length) showToast('Could not locate the dropped files on disk', 'error')
-      } catch {
-        showToast('Could not locate the dropped files on disk', 'error')
+        if (!res.paths.length) {
+          showToast('Could not locate the dropped files on disk', 'error')
+          return
+        }
+        resolved.push(...res.paths)
       }
+    } catch {
+      showToast('Could not locate the dropped items on disk', 'error')
+      return
     }
+    if (resolved.length) await importPaths(resolved, 'replace')
   }
 
   if (loadingTracks) {
@@ -501,13 +657,18 @@ export function TrackTable() {
         <div className="empty-icon">
           <FolderIcon />
         </div>
-        <h2>Add music to get started</h2>
+        <h2>{engineStarting ? 'Starting the engine…' : 'Add music to get started'}</h2>
         <p>
-          Pick a folder — or drop files and folders here — and TagForge reads every supported
-          tag so you can fix them in bulk with rules.
+          {engineStarting
+            ? 'YAME is waking up its metadata engine. This only takes a moment.'
+            : 'Pick a folder — or drop files and folders here — and YAME reads every supported tag so you can fix them in bulk with rules.'}
         </p>
         <div className="empty-actions">
-          <button className="primary-btn" onClick={() => pickMusic('replace')}>
+          <button
+            className="primary-btn"
+            disabled={engineStarting}
+            onClick={() => pickMusic('replace', importPaths)}
+          >
             Add music
           </button>
         </div>
@@ -519,8 +680,22 @@ export function TrackTable() {
 
   const onHeaderContext = (e: React.MouseEvent, key: SortKey) => {
     e.preventDefault()
-    setFreezeMenu({ x: e.clientX, y: e.clientY, key })
+    menuColumnRef.current = key
+    // Native macOS menu when we can; the styled DOM menu is the dev fallback.
+    void invoke<boolean>('show_column_menu', {
+      columns: ALL_COLUMNS.map((c) => [c.key, c.label] as [string, string]),
+      frozen: frozenSet.has(key),
+      hidden: colState.hidden,
+      x: e.clientX,
+      y: e.clientY,
+    })
+      .then((handled) => {
+        if (handled !== true) setFreezeMenu({ x: e.clientX, y: e.clientY, key })
+      })
+      .catch(() => setFreezeMenu({ x: e.clientX, y: e.clientY, key }))
   }
+
+  // Column ids arriving from the native menu.
 
   return (
     <div
@@ -686,6 +861,7 @@ function TableRow({
 }) {
   return (
     <tr
+      data-path={track.file.path}
       className={(selected ? 'selected' : '') + (hovered ? ' hover' : '')}
       onClick={onClick}
       onDoubleClick={onDoubleClick}

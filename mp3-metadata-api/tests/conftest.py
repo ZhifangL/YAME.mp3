@@ -33,6 +33,18 @@ def audio_file(tmp_path: Path) -> Path:
     return target
 
 
+@pytest.fixture
+def make_audio():
+    """Factory: create a taggable audio file at an arbitrary path."""
+
+    def _make(path: Path, seconds: float = 0.05) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _tone(path, seconds)
+        return path
+
+    return _make
+
+
 def _png_chunk(tag: bytes, data: bytes) -> bytes:
     return (
         struct.pack(">I", len(data))

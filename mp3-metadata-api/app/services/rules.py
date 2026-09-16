@@ -103,7 +103,13 @@ class RuleContext:
 
     def set(self, key: str, value: str) -> None:
         if key == "filename":
-            self.filename = value or ""
+            # The file name must never be blank — an empty name is not a file.
+            # Refusing here covers every route to it at once: CLEAR, a WRITE
+            # with no value, a REPLACE that matched the whole name, or a
+            # COPY FROM an empty source. The rule simply reports no change.
+            if not (value or "").strip():
+                return
+            self.filename = value
             return
         if key in ("stem", "ext", "folder_name", "folder_path"):
             return  # read-only pseudo-fields
@@ -134,6 +140,18 @@ class Rule(ABC):
             return None
         return {"field": key, "label": field_label(key), "before": before, "after": after}
 
+    @staticmethod
+    def _write(ctx, key: str, value: str) -> Optional[dict]:
+        """Set a field and report the change that actually took effect.
+
+        Reading the value back matters: the context refuses some writes — it
+        will not blank the file name, and ignores the read-only pseudo-fields —
+        and a rule must never claim a change it did not make.
+        """
+        before = ctx.get(key)
+        ctx.set(key, value)
+        return Rule._changed(key, before, ctx.get(key))
+
 
 def _clear_cover_state(ctx) -> list[dict]:
     """Sequential removal of the working cover state (used by SET COVER's
@@ -150,16 +168,16 @@ class ClearRule(Rule):
     label = "Clear"
     description = "Remove the value of a field."
     params = [
-        {"name": "field", "label": "In field", "kind": "field", "default": "comment"},
+        # Clearing a file name is never meaningful, so it is not offered.
+        {"name": "field", "label": "In field", "kind": "field", "default": "comment",
+         "exclude": ["filename"]},
     ]
 
     def apply(self, ctx, params):
         key = params.get("field") or ""
         if key not in RULE_FIELD_KEYS:
             return []
-        before = ctx.get(key)
-        ctx.set(key, "")
-        change = self._changed(key, before, "")
+        change = self._write(ctx, key, "")
         return [change] if change else []
 
 
@@ -189,8 +207,7 @@ class ReplaceRule(Rule):
         # A function replacement keeps the text literal: re.sub() would
         # otherwise interpret backslashes and \g<...> escapes inside it.
         after = regex.sub(lambda _match: replace, before)
-        ctx.set(key, after)
-        change = self._changed(key, before, after)
+        change = self._write(ctx, key, after)
         return [change] if change else []
 
 
@@ -208,9 +225,7 @@ class WriteRule(Rule):
         value = params.get("value") or ""
         if key not in RULE_FIELD_KEYS:
             return []
-        before = ctx.get(key)
-        ctx.set(key, value)
-        change = self._changed(key, before, value)
+        change = self._write(ctx, key, value)
         return [change] if change else []
 
 
@@ -230,10 +245,8 @@ class AppendRule(Rule):
         sep = params.get("separator") or ""
         if key not in RULE_FIELD_KEYS:
             return []
-        before = ctx.get(key)
-        after = before + sep + value
-        ctx.set(key, after)
-        change = self._changed(key, before, after)
+        after = ctx.get(key) + sep + value
+        change = self._write(ctx, key, after)
         return [change] if change else []
 
 
@@ -242,7 +255,9 @@ class CopyFromRule(Rule):
     label = "Copy From"
     description = "Copy the value of another field (or File Name) into this field."
     params = [
-        {"name": "source", "label": "From field", "kind": "field", "default": "date"},
+        # A source may be any field, including the read-only pseudo-fields.
+        {"name": "source", "label": "From field", "kind": "field", "default": "date",
+         "role": "source"},
         {"name": "field", "label": "Into field", "kind": "field", "default": "album"},
     ]
 
@@ -251,10 +266,8 @@ class CopyFromRule(Rule):
         source = params.get("source") or ""
         if key not in RULE_FIELD_KEYS or source not in RULE_FIELD_KEYS:
             return []
-        before = ctx.get(key)
         value = ctx.get(source)
-        ctx.set(key, value)
-        change = self._changed(key, before, value)
+        change = self._write(ctx, key, value)
         return [change] if change else []
 
 
@@ -267,10 +280,20 @@ class ParseFilenameRule(Rule):
          "placeholder": "Artist - Title",
          "help": "Each * captures a chunk of the file name. Assign each capture to a field below."},
         {"name": "include_extension", "label": "Include extension", "kind": "bool", "default": False},
-        # assignments is a dict {capture_index: field_key}, produced by the parse_pattern editor.
+        # assignments is a dict {capture_index: field_key}, produced by the
+        # parse_pattern editor. The name fields are excluded: parsing a file
+        # name into the file name is circular.
         {"name": "assignments", "label": "Assignments", "kind": "parse_assignments",
-         "required": True, "default": {}},
+         "required": True, "default": {}, "exclude": ["filename", "stem"]},
     ]
+
+    #: Fields this rule must not write, taken from its own param schema so the
+    #: engine and the UI cannot drift apart.
+    def _excluded(self) -> set[str]:
+        for param in self.params:
+            if param.get("name") == "assignments":
+                return set(param.get("exclude") or [])
+        return set()
 
     def apply(self, ctx, params):
         pattern = params.get("pattern") or ""
@@ -282,18 +305,26 @@ class ParseFilenameRule(Rule):
         if match is None:
             return []
         assignments = params.get("assignments") or {}
+        if not isinstance(assignments, dict):
+            return []
+        # Writing the file name from the file name is circular; a saved preset
+        # that still carries such an assignment is ignored, not obeyed.
+        excluded = self._excluded()
+        total_groups = match.re.groups
         changes: list[dict] = []
         for index_str, field_key in assignments.items():
             try:
                 index = int(index_str)
             except (TypeError, ValueError):
                 continue
-            if field_key not in RULE_FIELD_KEYS:
+            # Stale assignments survive in a saved rule when the pattern is
+            # shortened; asking for a group that no longer exists used to raise
+            # IndexError and fail the whole request.
+            if index < 1 or index > total_groups:
                 continue
-            value = match.group(index) or ""
-            before = ctx.get(field_key)
-            ctx.set(field_key, value)
-            change = self._changed(field_key, before, value)
+            if field_key not in RULE_FIELD_KEYS or field_key in excluded:
+                continue
+            change = self._write(ctx, field_key, match.group(index) or "")
             if change:
                 changes.append(change)
         return changes
@@ -325,9 +356,13 @@ class SetCoverRule(Rule):
             image_data = image.get("data_base64") or ""
             mime = str(image.get("mime") or "image/jpeg")
             name = str(image.get("name") or "")
-        # Legacy "remove" mode or an empty image: strip artwork.
-        if mode == "remove" or not image_data:
+        # Only the explicit legacy "remove" mode clears artwork. A SET COVER
+        # that is missing its image is incomplete, and an imported or
+        # hand-edited preset must not be able to delete every cover in a batch.
+        if mode == "remove":
             return _clear_cover_state(ctx)
+        if not image_data:
+            return []
         # No-op when the working state already holds exactly this image.
         if ctx.cover_state.get("data") == image_data:
             return []
@@ -416,8 +451,7 @@ class ChangeCaseRule(Rule):
             after = self._sentence_case(before)
         else:
             after = self._title_case(before)
-        ctx.set(key, after)
-        change = self._changed(key, before, after)
+        change = self._write(ctx, key, after)
         return [change] if change else []
 
 
@@ -464,10 +498,6 @@ def registry_specs() -> list[dict]:
         }
         for cls in REGISTRY.values()
     ]
-
-
-def get_rule(type_name: str) -> Optional[type[Rule]]:
-    return REGISTRY.get(type_name)
 
 
 # ------------------------------------------------------------------ ruleset runner

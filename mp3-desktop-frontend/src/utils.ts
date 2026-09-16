@@ -35,12 +35,6 @@ export function dirOf(path: string): string {
   return idx === -1 ? '' : path.slice(0, idx)
 }
 
-/** File name part of a path. */
-export function baseName(path: string): string {
-  const idx = path.lastIndexOf('/')
-  return idx === -1 ? path : path.slice(idx + 1)
-}
-
 /** Join a directory and a file name with exactly one separator. */
 export function joinPath(dir: string, name: string): string {
   return dir ? dir.replace(/\/+$/, '') + '/' + name : name

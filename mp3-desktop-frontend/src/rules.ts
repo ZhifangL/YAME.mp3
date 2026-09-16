@@ -1,7 +1,7 @@
 // Client-side rule helpers: defaults, human summaries, preview text.
 // The engine (Python) is authoritative for results; these helpers only
 // describe and format for display.
-import type { ChangeRecord, RegistryResponse, RuleInstance, RuleParamSpec } from './types'
+import type { ChangeRecord, RegistryResponse, RuleField, RuleInstance, RuleParamSpec } from './types'
 
 export function defaultParams(specParams: RuleParamSpec[]): Record<string, unknown> {
   const out: Record<string, unknown> = {}
@@ -25,6 +25,21 @@ export function defaultParams(specParams: RuleParamSpec[]): Record<string, unkno
     out[p.name] = p.default ?? (p.kind === 'choice' && p.choices.length ? p.choices[0].key : '')
   }
   return out
+}
+
+/**
+ * The fields a parameter's picker may offer.
+ *
+ * Targets are limited to writable fields (writing a read-only pseudo-field
+ * silently did nothing), sources may be anything, and a param can exclude
+ * specific keys — CLEAR must not offer the file name, and PARSE FILENAME must
+ * not offer either name field, since parsing a name into itself is circular.
+ */
+export function selectableFields(registry: RegistryResponse, param: RuleParamSpec): RuleField[] {
+  const excluded = new Set(param.exclude ?? [])
+  return registry.fields.filter(
+    (f) => !excluded.has(f.key) && (param.role === 'source' || f.writable),
+  )
 }
 
 export function fieldLabel(registry: RegistryResponse, key: string): string {

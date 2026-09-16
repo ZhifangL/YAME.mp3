@@ -22,12 +22,12 @@ export function PresetManager({ onClose }: { onClose: () => void }) {
       showToast('Select at least one ruleset to export', 'error')
       return
     }
-    const payload = { tagforge_presets: 1, exported_unix: Date.now() / 1000, presets: selected }
+    const payload = { yame_presets: 1, exported_unix: Date.now() / 1000, presets: selected }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = selected.length === 1 ? selected[0].name + '.tagforge.json' : 'tagforge-presets.json'
+    a.download = selected.length === 1 ? selected[0].name + '.yame.json' : 'yame-presets.json'
     a.click()
     URL.revokeObjectURL(url)
     showToast('Exported ' + selected.length + ' ruleset' + (selected.length === 1 ? '' : 's'), 'success')
@@ -48,7 +48,7 @@ export function PresetManager({ onClose }: { onClose: () => void }) {
       const count = await importPresets(valid as { id?: string; name: string; ruleset: never }[])
       showToast('Imported ' + count + ' ruleset' + (count === 1 ? '' : 's'), 'success')
     } catch {
-      showToast('This file is not a valid TagForge presets export', 'error')
+      showToast('This file is not a valid YAME presets export', 'error')
     }
   }
 
@@ -59,11 +59,19 @@ export function PresetManager({ onClose }: { onClose: () => void }) {
       return
     }
     if (!window.confirm('Delete ' + ids.length + ' ruleset' + (ids.length === 1 ? '' : 's') + '?')) return
+    let deleted = 0
     for (const id of ids) {
-      await deletePreset(id)
+      try {
+        await deletePreset(id)
+        deleted++
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : String(err), 'error')
+      }
     }
     setChecked(new Set())
-    showToast('Deleted ' + ids.length + ' ruleset' + (ids.length === 1 ? '' : 's'), 'success')
+    if (deleted) {
+      showToast('Deleted ' + deleted + ' ruleset' + (deleted === 1 ? '' : 's'), 'success')
+    }
   }
 
   return (
@@ -128,12 +136,12 @@ export function PresetManager({ onClose }: { onClose: () => void }) {
 
 function ExportOne({ preset }: { preset: Preset }) {
   const download = () => {
-    const payload = { tagforge_presets: 1, presets: [preset] }
+    const payload = { yame_presets: 1, presets: [preset] }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = preset.name + '.tagforge.json'
+    a.download = preset.name + '.yame.json'
     a.click()
     URL.revokeObjectURL(url)
   }

@@ -11,6 +11,89 @@ from pathlib import Path
 from app.services.audio_io import AUDIO_SUFFIXES
 
 
+_SKIP_DIR_NAMES = {"node_modules", "__pycache__", ".git"}
+
+# Bounds so a drop of "/" or a huge tree cannot hang the request.
+_MAX_DIRS = 5000
+_MAX_FILES = 20000
+
+
+def _iter_audio_files(base: Path, *, include_hidden: bool = False,
+                      max_dirs: int = _MAX_DIRS, max_files: int = _MAX_FILES):
+    """Yield audio files in *base*'s tree, depth-first, folders alphabetically.
+
+    Shared by recursive browsing and by drop expansion so both agree on what
+    counts as an audio file and which folders are skipped.
+    """
+    stack: list[Path] = [base]
+    seen_dirs = 0
+    found = 0
+    while stack:
+        current = stack.pop()
+        seen_dirs += 1
+        if seen_dirs > max_dirs or found >= max_files:
+            return
+        try:
+            children = sorted(current.iterdir(), key=lambda entry: entry.name.casefold())
+        except OSError:
+            continue
+        # Push directories in reverse so the LIFO stack pops them alphabetically.
+        subdirs: list[Path] = []
+        for entry in children:
+            if entry.name.startswith(".") and not include_hidden:
+                continue
+            try:
+                if entry.is_dir():
+                    if entry.name not in _SKIP_DIR_NAMES:
+                        subdirs.append(entry)
+                elif entry.is_file() and entry.suffix.lower() in AUDIO_SUFFIXES:
+                    found += 1
+                    if found > max_files:
+                        return
+                    yield entry
+            except OSError:
+                # Broken symlink / vanishing entry - skip it silently.
+                continue
+        stack.extend(reversed(subdirs))
+
+
+def expand_paths(paths: list[str], *, include_hidden: bool = False) -> dict:
+    """Flatten a mixed selection of files and folders into audio file paths.
+
+    Finder and Explorer hand over whatever the user dragged, so a single drop
+    can contain audio files, folders, and things that are neither. Folders are
+    walked recursively; loose files are kept only when they look like audio;
+    everything else is reported in ``skipped`` so the UI can say what it left
+    out instead of silently ignoring it.
+    """
+    files: list[str] = []
+    skipped: list[str] = []
+    seen: set[str] = set()
+
+    for raw in paths or []:
+        if not raw:
+            continue
+        candidate = Path(raw).expanduser()
+        try:
+            if candidate.is_dir():
+                for entry in _iter_audio_files(candidate, include_hidden=include_hidden):
+                    key = str(entry)
+                    if key not in seen:
+                        seen.add(key)
+                        files.append(key)
+            elif candidate.is_file() and candidate.suffix.lower() in AUDIO_SUFFIXES:
+                key = str(candidate)
+                if key not in seen:
+                    seen.add(key)
+                    files.append(key)
+            else:
+                skipped.append(str(candidate))
+        except OSError:
+            skipped.append(str(candidate))
+
+    return {"files": files, "skipped": skipped, "truncated": len(files) >= _MAX_FILES}
+
+
 def list_directory(path: str | None = None, *, include_hidden: bool = False, recursive: bool = False) -> dict:
     """List sub-folders and audio files inside *path* (default: home folder).
 
@@ -41,37 +124,19 @@ def list_directory(path: str | None = None, *, include_hidden: bool = False, rec
     if recursive:
         # Gather every audio file in the tree below *base* (bounded depth,
         # hidden/system directories skipped).
-        stack: list[Path] = [base]
-        seen_dirs = 0
-        while stack:
-            current = stack.pop()
-            seen_dirs += 1
-            if seen_dirs > 5000:
-                break
+        for entry in _iter_audio_files(base, include_hidden=include_hidden):
             try:
-                children = list(current.iterdir())
+                stat = entry.stat()
             except OSError:
                 continue
-            children.sort(key=lambda entry: entry.name.casefold())
-            for entry in children:
-                if entry.name.startswith(".") and not include_hidden:
-                    continue
-                try:
-                    if entry.is_dir():
-                        if entry.name not in {"node_modules", "__pycache__"}:
-                            stack.append(entry)
-                    elif entry.is_file() and entry.suffix.lower() in AUDIO_SUFFIXES:
-                        stat = entry.stat()
-                        audio_files.append(
-                            {
-                                "name": entry.name,
-                                "path": str(entry),
-                                "size_bytes": int(stat.st_size),
-                                "modified_unix": float(stat.st_mtime),
-                            }
-                        )
-                except OSError:
-                    continue
+            audio_files.append(
+                {
+                    "name": entry.name,
+                    "path": str(entry),
+                    "size_bytes": int(stat.st_size),
+                    "modified_unix": float(stat.st_mtime),
+                }
+            )
     else:
         for entry in entries:
             if entry.name.startswith(".") and not include_hidden:

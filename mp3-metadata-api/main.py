@@ -1,11 +1,11 @@
-"""TagForge engine entry point.
+"""YAME engine entry point.
 
 Run with (from this folder):
     .venv/bin/uvicorn main:app --port 8000
 or directly:
     .venv/bin/python main.py
 
-Port selection: TAGFORGE_PORT overrides the port. When the configured port
+Port selection: YAME_PORT overrides the port. When the configured port
 (8000 by default) is already in use, the engine falls back to an ephemeral
 free port. The actual port is always written to <config>/engine.port and
 printed as "ENGINE_PORT=<n>" so the frontend (Vite dev proxy now, the Tauri
@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import os
 import socket
+import threading
+import time
 from contextlib import asynccontextmanager
 
 DEFAULT_PORT = 8000
@@ -37,7 +39,7 @@ def _port_is_free(port: int) -> bool:
 
 
 def _pick_port(default: int) -> int:
-    env = os.environ.get("TAGFORGE_PORT")
+    env = os.environ.get("YAME_PORT")
     if env:
         return int(env)
     if _port_is_free(default):
@@ -56,7 +58,7 @@ def engine_port() -> int:
 
     Note: when the engine is started as ``uvicorn main:app --port N`` the CLI
     port wins and this value can disagree; use ``python main.py`` or
-    ``TAGFORGE_PORT`` when the port file must be authoritative.
+    ``YAME_PORT`` when the port file must be authoritative.
     """
     global _port
     if _port is None:
@@ -72,9 +74,34 @@ def _publish_port(port: int) -> None:
     print("ENGINE_PORT=" + str(port), flush=True)
 
 
+def _exit_with_parent(parent_pid: int) -> None:
+    """Quit when the desktop shell that launched us goes away.
+
+    The sidecar runs in its own process group so the app can signal all of it
+    on a clean exit, but a crash or a force-quit never gets that far — the
+    engine would linger and every later launch would start another one.
+    """
+
+    def watch() -> None:
+        while True:
+            time.sleep(5)
+            try:
+                os.kill(parent_pid, 0)
+            except ProcessLookupError:
+                os._exit(0)
+            except OSError:
+                # Permission denied and friends mean it is still alive.
+                continue
+
+    threading.Thread(target=watch, name="parent-watchdog", daemon=True).start()
+
+
 @asynccontextmanager
 async def _lifespan(_app):
     _publish_port(engine_port())
+    parent = os.environ.get("YAME_PARENT_PID")
+    if parent and parent.isdigit():
+        _exit_with_parent(int(parent))
     yield
 
 

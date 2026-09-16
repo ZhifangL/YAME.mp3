@@ -27,7 +27,7 @@ from app.services.audio_io import (
     ("NoExtension", "NoExtension.mp3"),
     ("  padded  ", "padded.mp3"),
     ("trailing.", "trailing.mp3"),
-    ("song.flac", "song.flac"),                    # deliberate container change
+    ("song.flac", "song.mp3"),                     # renaming cannot convert formats
     ("UPPER.MP3", "UPPER.MP3"),
     ("a.b.c", "a.b.c.mp3"),
     ("", "song.mp3"),
@@ -98,6 +98,7 @@ def test_reading_a_non_audio_file_raises_metadata_error(tmp_path: Path):
 # ------------------------------------------------------------------ renames
 
 def test_rename_keeps_the_extension(audio_file: Path):
+    # A dot inside the name is not an extension change, so nothing to warn about.
     outcome = write_fields(str(audio_file), {}, rename_to="Mr. Brightside")
     assert outcome.renamed
     assert outcome.warnings == []
@@ -112,9 +113,9 @@ def test_rename_without_an_extension(audio_file: Path):
 
 
 def test_rename_refused_when_the_target_exists(audio_file: Path):
-    blocker = audio_file.parent / "taken.mp3"
+    blocker = audio_file.parent / "taken.wav"
     blocker.write_bytes(b"x")
-    outcome = write_fields(str(audio_file), {}, rename_to="taken.mp3")
+    outcome = write_fields(str(audio_file), {}, rename_to="taken.wav")
     assert not outcome.renamed
     assert outcome.path == str(audio_file)
     assert audio_file.exists()

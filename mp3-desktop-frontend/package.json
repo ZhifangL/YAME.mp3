@@ -1,13 +1,19 @@
 {
   "name": "mp3-desktop-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sidecar": "bash scripts/build-sidecar.sh",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "bash scripts/build-sidecar.sh && tauri build",
+    "package": "bash scripts/build-sidecar.sh && tauri build",
+    "icon": "bash scripts/build-icon.sh"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -15,6 +21,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",

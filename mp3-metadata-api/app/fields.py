@@ -68,8 +68,6 @@ PSEUDO_FIELDS: list[tuple[str, str, bool]] = [
     ("folder_path", "Folder Path", False),
 ]
 
-PSEUDO_FIELD_KEYS: set[str] = {key for key, _, _ in PSEUDO_FIELDS}
-
 # Pseudo/sort fields that only make sense internally — hidden from the
 # rule field dropdowns to keep the picker focused on real metadata.
 EXCLUDE_FROM_RULES: set[str] = {
@@ -81,14 +79,33 @@ EXCLUDE_FROM_RULES: set[str] = {
     "sort_album",
 }
 
+# Fields a rule may never blank. The file name is the only one: an empty name
+# is not a valid file, so a rule that would clear it is refused outright (see
+# RuleContext.set). Rules may still *rename* — they just cannot empty it.
+MUST_NOT_BE_EMPTY: set[str] = {"filename"}
+
 # Fields offered as rule targets / sources: writable tag fields first,
 # then pseudo-fields ("filename" is the only writable pseudo-field).
 RULE_FIELDS: list[dict] = [
-    {"key": f.key, "label": f.label, "kind": f.kind, "pseudo": False, "writable": f.writable}
+    {
+        "key": f.key,
+        "label": f.label,
+        "kind": f.kind,
+        "pseudo": False,
+        "writable": f.writable,
+        "must_not_be_empty": f.key in MUST_NOT_BE_EMPTY,
+    }
     for f in FIELDS
     if f.writable and f.key not in EXCLUDE_FROM_RULES
 ] + [
-    {"key": key, "label": label, "kind": "text", "pseudo": True, "writable": writable}
+    {
+        "key": key,
+        "label": label,
+        "kind": "text",
+        "pseudo": True,
+        "writable": writable,
+        "must_not_be_empty": key in MUST_NOT_BE_EMPTY,
+    }
     for key, label, writable in PSEUDO_FIELDS
     if key not in EXCLUDE_FROM_RULES
 ]
