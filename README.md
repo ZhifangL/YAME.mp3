@@ -160,8 +160,26 @@ pnpm run package        # -> src-tauri/target/release/bundle/
 ```
 
 That freezes the engine with PyInstaller, builds the interface, compiles the
-Rust shell, and writes `YAME.app` and a `.dmg`. A full macOS bundle is about
-20 MB.
+Rust shell, signs the bundle, and writes `YAME.app` and a `.dmg`. A full macOS
+bundle is about 20 MB.
+
+### Signing
+
+The build signs the app ad-hoc (`signingIdentity: "-"`). Two details matter and
+are easy to get wrong:
+
+- **The bundle must be signed at all.** Without it the executable keeps the
+  linker's own signature, which claims bundle resources that do not exist, and
+  macOS reports the downloaded app as *damaged* — a dead end with no way for
+  the user to proceed.
+- **The engine needs `disable-library-validation`.** The sidecar is a
+  PyInstaller one-file binary that unpacks `libpython` to a temporary directory
+  at launch. Under the Hardened Runtime, libraries must be signed by the same
+  team, so without the entitlement in `src-tauri/entitlements.plist` the engine
+  cannot start.
+
+To ship a warning-free download, set `signingIdentity` to a Developer ID and
+add notarisation; nothing else about the build changes.
 
 Other useful scripts:
 

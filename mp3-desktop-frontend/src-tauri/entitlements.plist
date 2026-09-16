@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  The engine is a PyInstaller one-file binary. At launch it unpacks
+	  libpython and its extension modules into a temporary directory and loads
+	  them from there. The Hardened Runtime only permits loading libraries
+	  signed by the same team, and those unpacked files are not — so without
+	  this the sidecar dies with:
+
+	      Failed to load Python shared library ... different Team IDs
+
+	  This is the entitlement Apple documents for exactly this case (embedded
+	  interpreters), and it is required for the app to run at all once the
+	  Hardened Runtime is on. It relaxes library validation for this process;
+	  it does not disable the sandbox, and it has no effect on the app's own
+	  code signature.
+	-->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>
