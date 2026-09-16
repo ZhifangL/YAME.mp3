@@ -12,6 +12,7 @@
     "check": "tsc -b && eslint . && vitest run",
     "preview": "vite preview",
     "sidecar": "node scripts/build-sidecar.mjs",
+    "sidecar:placeholder": "node scripts/placeholder-sidecar.mjs",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "node scripts/build-sidecar.mjs && tauri build",
