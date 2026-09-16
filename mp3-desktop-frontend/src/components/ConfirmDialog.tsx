@@ -16,10 +16,13 @@ export function ConfirmDialog({
   onClose: () => void
 }) {
   const confirmButton = useRef<HTMLButtonElement>(null)
+  const cancelButton = useRef<HTMLButtonElement>(null)
   // Which request has already been answered. `state` does not clear until React
   // re-renders, so without this a fast second press (or Escape right after a
   // click) could resolve the same promise twice.
   const answeredFor = useRef<ConfirmRequest | null>(null)
+  // Where focus was before the dialog opened, so it can be handed back.
+  const restoreFocusTo = useRef<HTMLElement | null>(null)
 
   const answer = useCallback(
     (value: boolean) => {
@@ -36,8 +39,14 @@ export function ConfirmDialog({
   // from scrolling the page underneath it.
   useEffect(() => {
     if (!state) return
+    restoreFocusTo.current = document.activeElement as HTMLElement | null
     const frame = requestAnimationFrame(() => confirmButton.current?.focus({ preventScroll: true }))
-    return () => cancelAnimationFrame(frame)
+    return () => {
+      cancelAnimationFrame(frame)
+      // Give focus back to whatever opened the dialog; leaving it on <body>
+      // would drop a keyboard user at the top of the page.
+      restoreFocusTo.current?.focus?.({ preventScroll: true })
+    }
   }, [state])
 
   useEffect(() => {
@@ -46,6 +55,22 @@ export function ConfirmDialog({
       if (e.key === 'Escape') {
         e.preventDefault()
         answer(false)
+        return
+      }
+      // The dialog is modal, so Tab must cycle inside it rather than walking
+      // into the page behind it.
+      if (e.key === 'Tab') {
+        const first = cancelButton.current
+        const last = confirmButton.current
+        if (!first || !last) return
+        const active = document.activeElement
+        if (e.shiftKey && (active === first || !document.querySelector('.confirm-modal')?.contains(active))) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault()
+          first.focus()
+        }
       }
     }
     document.addEventListener('keydown', onKey)
@@ -67,7 +92,7 @@ export function ConfirmDialog({
           {state.message && <p className="confirm-message">{state.message}</p>}
         </div>
         <div className="confirm-actions">
-          <button className="text-btn" onClick={() => answer(false)}>
+          <button ref={cancelButton} className="text-btn" onClick={() => answer(false)}>
             {state.cancelLabel ?? 'Cancel'}
           </button>
           <button

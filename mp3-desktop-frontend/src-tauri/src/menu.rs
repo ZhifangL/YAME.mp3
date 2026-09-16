@@ -51,11 +51,10 @@ pub const MENU_EVENT: &str = "yame://menu";
 
 /// One row of the app menu bar.
 ///
-/// The structure is shared; only the macOS-only conveniences are gated, because
-/// some of them do not merely look wrong elsewhere — `PredefinedMenuItem::services`
-/// and `show_all` are documented as unsupported on Windows and Linux, and
-/// `services` fails to construct at all, which would take the whole app down
-/// during startup.
+/// The structure is shared; the macOS-only conveniences are gated because they
+/// are inert or meaningless elsewhere, not because they fail to build.
+/// `services`, `show_all`, `hide` and `hide_others` are macOS concepts with no
+/// Windows equivalent, and `undo`/`redo` are documented as unsupported there.
 pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
     // macOS renders the first submenu as the bold application menu, so it gets
     // About/Services/Hide/Quit. On Windows those belong under Help and the
@@ -129,6 +128,11 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::me
         )
         .build()?;
 
+    // A Window menu holds Minimize/Maximize/Close, which need the window whose
+    // menu bar they belong to. Windows puts those in the title bar's own system
+    // menu instead, and a Window menu duplicating them would be inert, so this
+    // is macOS-only.
+    #[cfg(target_os = "macos")]
     let window_menu = SubmenuBuilder::new(app, "Window")
         .item(&PredefinedMenuItem::minimize(app, None)?)
         .item(&PredefinedMenuItem::maximize(app, None)?)
@@ -141,7 +145,8 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::me
         .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
         .build()?;
 
-    // Windows and Linux apps conventionally end with Help, holding About.
+    // Windows and Linux apps conventionally end with Help, holding About, and
+    // put Exit at the foot of File rather than in a Window menu.
     #[cfg(not(target_os = "macos"))]
     let menu = {
         let help_menu = SubmenuBuilder::new(app, "Help")
@@ -150,12 +155,13 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::me
                 None,
                 Some(AboutMetadata {
                     name: Some("YAME.mp3".into()),
+                    version: Some(env!("CARGO_PKG_VERSION").into()),
                     ..AboutMetadata::default()
                 }),
             )?)
             .build()?;
         MenuBuilder::new(app)
-            .items(&[&file_menu, &edit_menu, &view_menu, &window_menu, &help_menu])
+            .items(&[&file_menu, &edit_menu, &view_menu, &help_menu])
             .build()?
     };
 
@@ -183,10 +189,17 @@ pub fn show_track_menu<R: Runtime>(
         &apps.iter().map(|a| a.path.clone()).collect::<Vec<_>>(),
     );
 
-    // A platform with no application enumeration yet gets no submenu at all,
-    // rather than an "Open With" that opens nothing.
+    // The submenu is built from whatever the platform could enumerate. When a
+    // platform can name no applications, it still gets a single "Open With…"
+    // entry that routes to the platform's own chooser — losing the feature
+    // entirely would be worse than a shorter menu.
+    enum OpenWith<R: Runtime> {
+        Submenu(tauri::menu::Submenu<R>),
+        Chooser,
+    }
+
     let open_with = if apps.is_empty() {
-        None
+        Some(OpenWith::Chooser)
     } else {
         let mut submenu = SubmenuBuilder::new(app, "Open With");
         for (choice, icon) in apps.iter().zip(icons) {
@@ -195,12 +208,12 @@ pub fn show_track_menu<R: Runtime>(
         }
         // "Other…" is deliberately icon-less: there is no single sensible icon
         // for "any application".
-        Some(
+        Some(OpenWith::Submenu(
             submenu
                 .separator()
                 .item(&MenuItemBuilder::with_id("openwith.other", "Other…").build(app)?)
                 .build()?,
-        )
+        ))
     };
 
     let copy_label = if selection_count > 1 {
@@ -211,8 +224,13 @@ pub fn show_track_menu<R: Runtime>(
 
     let mut menu = MenuBuilder::new(app)
         .item(&MenuItemBuilder::with_id("open", "Open").build(app)?);
-    if let Some(open_with) = &open_with {
-        menu = menu.item(open_with);
+    match &open_with {
+        Some(OpenWith::Submenu(submenu)) => menu = menu.item(submenu),
+        Some(OpenWith::Chooser) => {
+            let item = MenuItemBuilder::with_id("openwith.other", "Open With…").build(app)?;
+            menu = menu.item(&item);
+        }
+        None => {}
     }
     let menu = menu
         .separator()

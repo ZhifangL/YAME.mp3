@@ -9,6 +9,7 @@ mod engine;
 mod macos;
 mod menu;
 mod platform;
+mod process_group;
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -21,7 +22,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             platform::pick_music,
             platform::open_default,
-            platform::apps_for_file,
             platform::open_with_app,
             platform::copy_files_to_clipboard,
             platform::read_files_from_clipboard,

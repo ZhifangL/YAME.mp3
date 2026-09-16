@@ -18,9 +18,9 @@
 
 /// An application that can open a file.
 ///
-/// Deliberately a plain data type with no platform behaviour: the menu builder
-/// serialises it to the frontend for `apps_for_file`, and the frontend treats
-/// `name` and `path` as opaque strings.
+/// A plain serialisable data type with no platform behaviour: the menu builder
+/// turns each entry into an `openwith:<path>` item id, and the frontend hands
+/// that path straight back to `open_with_app`.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AppChoice {
     pub name: String,
@@ -54,24 +54,41 @@ mod imp {
     }
 }
 
-/// A Windows application is an executable (or a shortcut the shell resolves).
+/// Windows asks the registry which applications claim the file's extension.
 #[cfg(target_os = "windows")]
 mod imp {
     use super::AppChoice;
     use tauri::{AppHandle, Runtime};
 
-    pub fn recommended_apps(_path: &str) -> Vec<AppChoice> {
-        Vec::new()
+    pub fn recommended_apps(path: &str) -> Vec<AppChoice> {
+        let mut choices: Vec<AppChoice> = crate::windows::recommended_apps(path)
+            .into_iter()
+            .map(|(name, path)| AppChoice { name, path })
+            .collect();
+        // Always offer the shell's own chooser. The registry's view of
+        // associations is incomplete on Windows 10 and 11 — it cannot see
+        // packaged apps or most per-user choices — so without this a user whose
+        // player is not listed would have no route to it at all.
+        choices.push(AppChoice {
+            name: crate::windows::CHOOSE_APP_LABEL.to_string(),
+            path: crate::windows::CHOOSE_APP.to_string(),
+        });
+        choices
     }
 
     pub fn app_icons<R: Runtime>(
         _app: &AppHandle<R>,
         app_paths: &[String],
     ) -> Vec<Option<Vec<u8>>> {
+        // Tauri cannot put an icon on a Windows menu item, so asking for one
+        // would be work with nowhere to go.
         vec![None; app_paths.len()]
     }
 
     pub fn is_application(app_path: &str) -> bool {
+        if app_path == crate::windows::CHOOSE_APP {
+            return true;
+        }
         // An executable, or a shortcut the shell will resolve — accepting `.lnk`
         // lets the user pick the Start-menu entries the Open With dialog shows.
         let lower = app_path.to_ascii_lowercase();
@@ -83,13 +100,12 @@ mod imp {
     }
 }
 
-/// No "Open With" enumeration and no way to launch a chosen application yet.
+/// Linux has no standard answer to "which applications can open this?".
 ///
-/// Returning an empty list is the honest answer, and the callers already handle
-/// it: the track context menu omits the whole submenu rather than showing an
-/// empty one, and `open_with_app` reports that the feature is unavailable
-/// instead of silently doing nothing. Filling this in is a Linux-only job;
-/// see the module docs above for the shape it has to satisfy.
+/// An empty list is honest, and the caller copes: the track context menu falls
+/// back to its own "Open With…" entry. `is_application` stays permissive about
+/// an existing file so that path reaches `open_with_app`'s real "not
+/// implemented yet" message instead of a misleading "Not an application".
 #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
 mod imp {
     use super::AppChoice;
@@ -106,8 +122,8 @@ mod imp {
         vec![None; app_paths.len()]
     }
 
-    pub fn is_application(_app_path: &str) -> bool {
-        false
+    pub fn is_application(app_path: &str) -> bool {
+        std::path::Path::new(app_path).is_file()
     }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { copyFiles, openWithDefault, pasteFiles, revealPath } from '../desktop'
+import { copyFiles, openWithApp, openWithDefault, pasteFiles, pickApplication, revealPath } from '../desktop'
 import { fileManagerName } from '../env'
 import { pickMusic } from '../pickers-helpers'
 import { invoke } from '../tauri'
@@ -549,8 +549,14 @@ export function TrackTable() {
         case 'open':
           await openWithDefault(path)
           break
-        case 'open-with':
-          throw new Error('"Open with…" is available in the packaged YAME app')
+        case 'open-with': {
+          // Only reachable from the browser-dev DOM menu: the packaged app
+          // shows a real native "Open With" from Rust. Say what this build can
+          // actually do rather than implying the feature is missing.
+          const appPath = await pickApplication()
+          if (appPath) await openWithApp(path, appPath)
+          break
+        }
         case 'copy':
           await copyFiles(selectedPaths.includes(path) && selectedPaths.length > 1 ? selectedPaths : [path])
           showToast('Copied ' + (selectedPaths.length > 1 ? selectedPaths.length + ' files' : 'file') + ' to the clipboard', 'success')

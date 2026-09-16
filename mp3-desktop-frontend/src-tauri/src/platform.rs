@@ -4,6 +4,7 @@
 //! plugin. Everything here is what that plugin cannot do: the mixed
 //! file-or-folder panel, launching with a chosen application, the file
 //! clipboard, and saving a playlist through a real save sheet.
+#[cfg(unix)]
 use std::process::Command;
 
 use tauri::AppHandle;
@@ -12,17 +13,25 @@ use crate::apps;
 
 #[cfg(target_os = "macos")]
 use crate::macos;
-/// Run a helper and return its stdout, or an error carrying stderr.
+
 /// Absolute, symlink-resolved form of a path.
 ///
 /// `open` parses its arguments as options, so a file literally named "-R"
-/// would be read as a flag. An absolute path always starts with "/".
+/// would be read as a flag, and a relative path would resolve against whatever
+/// the process's working directory happens to be. macOS only: see the Windows
+/// note in `open_default`.
+#[cfg(target_os = "macos")]
 fn absolute(path: &str) -> String {
     std::fs::canonicalize(path)
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| path.to_string())
 }
 
+/// Run a helper and return its stdout, or an error carrying stderr.
+///
+/// Unix only: Windows reaches the shell through `ShellExecuteW` and the Win32
+/// APIs directly (see [`crate::windows`]), rather than by spawning a command.
+#[cfg(unix)]
 fn run(program: &str, args: &[&str]) -> Result<String, String> {
     let output = Command::new(program)
         .args(args)
@@ -72,22 +81,14 @@ pub async fn open_default(path: String) -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        // `start` is a cmd builtin, hence the shell.
-        return run("cmd", &["/C", "start", "", &absolute(&path)]).map(|_| ());
+        // Not `cmd /C start`: that path goes through a shell which expands
+        // `%VAR%`, so a file named "100% Pure.mp3" would open the wrong thing.
+        return crate::windows::open_default(&path);
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
         return run("xdg-open", &[&absolute(&path)]).map(|_| ());
     }
-}
-
-/// Applications that can open `path`, for the "Open With" submenu.
-///
-/// Returns an empty list on a platform with no enumeration yet — the menu
-/// builder omits the submenu rather than showing an empty one.
-#[tauri::command]
-pub fn apps_for_file(path: String) -> Vec<apps::AppChoice> {
-    apps::recommended_apps(&path)
 }
 
 /// Open `path` with a specific application bundle.
@@ -97,9 +98,20 @@ pub async fn open_with_app(path: String, app_path: String) -> Result<(), String>
         return Err(format!("File does not exist: {path}"));
     }
     // Each platform knows what counts as something it can hand a file to: a
-    // bundle on macOS, an executable on Windows.
+    // bundle on macOS, an executable on Windows. The chooser sentinel counts
+    // everywhere it exists.
     if !apps::is_application(&app_path) {
         return Err(format!("Not an application: {app_path}"));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Windows has no "launch this exact executable with this file" API that
+        // is worth using. Its shell chooser is the supported route, and the
+        // only one that can offer the packaged apps and per-user associations
+        // the registry cannot see.
+        let _ = &app_path;
+        return crate::windows::open_with_chooser(&path);
     }
 
     #[cfg(target_os = "macos")]
@@ -108,13 +120,6 @@ pub async fn open_with_app(path: String, app_path: String) -> Result<(), String>
         // handles quarantine, LaunchServices registration and already-running
         // apps the same way Finder does.
         return run("open", &["-a", &absolute(&app_path), &absolute(&path)]).map(|_| ());
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        // Windows has no "open with -a" equivalent: the documented route is the
-        // shell's Open With dialog, which is what the file manager shows.
-        return crate::windows::open_with(&app_path, &path);
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

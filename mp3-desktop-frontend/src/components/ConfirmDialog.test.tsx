@@ -6,6 +6,7 @@
 // route, and exactly one resolution per dialog.
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { ConfirmDialog } from './ConfirmDialog'
 
@@ -124,5 +125,46 @@ describe('ConfirmDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     await user.keyboard('{Escape}')
     expect(resolve).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Tab inside the dialog', async () => {
+    const user = userEvent.setup()
+    render(<ConfirmDialog state={{ title: 'Sure?', resolve: vi.fn() }} onClose={() => {}} />)
+    const cancel = screen.getByRole('button', { name: 'Cancel' })
+    const confirm = screen.getByRole('button', { name: 'OK' })
+
+    await waitFor(() => expect(confirm).toHaveFocus())
+    // Tab off the last control wraps to the first rather than leaving the modal.
+    await user.tab()
+    expect(cancel).toHaveFocus()
+    await user.tab()
+    expect(confirm).toHaveFocus()
+    // And backwards off the first wraps to the last.
+    await user.tab({ shift: true })
+    expect(cancel).toHaveFocus()
+  })
+
+  it('hands focus back to whatever opened it', async () => {
+    const user = userEvent.setup()
+    function Opener() {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>delete</button>
+          <ConfirmDialog
+            state={open ? { title: 'Sure?', resolve: () => setOpen(false) } : null}
+            onClose={() => setOpen(false)}
+          />
+        </>
+      )
+    }
+    render(<Opener />)
+    const opener = screen.getByRole('button', { name: 'delete' })
+    await user.click(opener)
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    // Without this a keyboard user is dropped back on <body>, at the top of
+    // the page, having lost their place.
+    await waitFor(() => expect(opener).toHaveFocus())
   })
 })

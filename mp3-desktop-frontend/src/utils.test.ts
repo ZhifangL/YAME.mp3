@@ -22,7 +22,14 @@ describe('dirOf', () => {
   })
 
   it('keeps the root of a POSIX path', () => {
-    expect(dirOf('/song.mp3')).toBe('')
+    // A file directly in "/" must not become a relative path after a rename.
+    expect(dirOf('/song.mp3')).toBe('/')
+    expect(joinPath(dirOf('/song.mp3'), 'other.mp3')).toBe('/other.mp3')
+  })
+
+  it('keeps the drive of a file at the root of a Windows drive', () => {
+    expect(dirOf('C:\\song.mp3')).toBe('C:')
+    expect(joinPath(dirOf('C:\\song.mp3'), 'other.mp3')).toBe('C:\\other.mp3')
   })
 })
 

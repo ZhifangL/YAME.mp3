@@ -14,10 +14,14 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
+use crate::process_group::ProcessGroup;
+
 /// Where the engine lives once it is running, and the handle to stop it.
 pub struct Engine {
     pub origin: String,
     child: Mutex<Option<Child>>,
+    /// Everything the engine forked dies with this (process group / job object).
+    group: ProcessGroup,
     /// False when we attached to an engine somebody else started (dev mode).
     owned: bool,
 }
@@ -53,6 +57,22 @@ fn sidecar_path() -> Option<PathBuf> {
     dev.is_file().then_some(dev)
 }
 
+/// The home directory, on every platform.
+///
+/// Windows has no `HOME`; it uses `USERPROFILE`. Falling back matters here
+/// because an unset `HOME` silently produced a *relative* `.config/yame` path,
+/// so a Windows developer's engine port file was never found.
+fn home_dir() -> Option<PathBuf> {
+    for name in ["HOME", "USERPROFILE"] {
+        if let Ok(value) = std::env::var(name) {
+            if !value.is_empty() {
+                return Some(PathBuf::from(value));
+            }
+        }
+    }
+    None
+}
+
 /// The port a developer's manually started engine published, if any.
 fn published_port() -> Option<u16> {
     if let Ok(explicit) = std::env::var("YAME_PORT") {
@@ -62,9 +82,8 @@ fn published_port() -> Option<u16> {
     }
     let config_dir = std::env::var("YAME_CONFIG_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/yame")
-        });
+        .ok()
+        .or_else(|| home_dir().map(|home| home.join(".config").join("yame")))?;
     std::fs::read_to_string(config_dir.join("engine.port"))
         .ok()?
         .trim()
@@ -93,6 +112,7 @@ pub fn start() -> Engine {
         return Engine {
             origin: format!("http://127.0.0.1:{port}"),
             child: Mutex::new(None),
+            group: ProcessGroup::new(),
             owned: false,
         };
     };
@@ -107,16 +127,21 @@ pub fn start() -> Engine {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    // Own process group: the PyInstaller one-file bootloader forks the real
-    // server, so signalling only the direct child would orphan it.
+    // Own process group on Unix: the PyInstaller one-file bootloader forks the
+    // real server, so signalling only the direct child would orphan it. Windows
+    // uses a job object instead, applied in `adopt` below — processes inherit
+    // their parent's job, so it covers the forked server too.
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
 
+    let group = ProcessGroup::new();
+
     match command.spawn() {
         Ok(mut child) => {
+            group.adopt(&child);
             if let Some(out) = child.stdout.take() {
                 forward_output(out, "engine");
             }
@@ -127,6 +152,7 @@ pub fn start() -> Engine {
             Engine {
                 origin,
                 child: Mutex::new(Some(child)),
+                group,
                 owned: true,
             }
         }
@@ -135,6 +161,7 @@ pub fn start() -> Engine {
             Engine {
                 origin: "http://127.0.0.1:8000".to_string(),
                 child: Mutex::new(None),
+                group,
                 owned: false,
             }
         }
@@ -153,19 +180,9 @@ impl Engine {
         };
         let Some(mut child) = guard.take() else { return };
 
-        #[cfg(unix)]
-        {
-            // Signal the group, then the process itself as a belt-and-braces.
-            let pid = child.id() as i32;
-            unsafe {
-                libc::kill(-pid, libc::SIGTERM);
-            }
-            let _ = child.kill();
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = child.kill();
-        }
+        // Terminates the whole group — the bootloader *and* the server it
+        // forked — then we reap the direct child so no zombie is left.
+        self.group.terminate(&mut child);
         let _ = child.wait();
         println!("[yame] engine stopped");
     }

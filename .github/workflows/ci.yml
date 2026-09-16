@@ -1,9 +1,10 @@
 name: CI
 
-# The port targets Windows first, and Windows cannot be built from the macOS
-# development machine — PyInstaller does not cross-compile and neither does the
-# MSVC linker. These runners are therefore the only place a Windows build is
-# verified before it reaches a real machine.
+# The port targets Windows first. Type checking the Rust half does work from
+# macOS (`cargo check --target x86_64-pc-windows-gnu`, with mingw-w64), but
+# *packaging* cannot: PyInstaller builds only for the interpreter it runs under,
+# and there is no MSVC linker here. So the Windows runner is the only place a
+# Windows build is produced and verified before it reaches a real machine.
 on:
   push:
     branches: [main]
