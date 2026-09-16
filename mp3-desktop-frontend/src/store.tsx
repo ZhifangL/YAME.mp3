@@ -1,8 +1,9 @@
 // Central app state: tracks, selection, ruleset, presets, overlays, toasts.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from './api'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { defaultParams } from './rules'
-import { StoreContext, type BuilderDraft, type SortKey, type Store, type ToastState } from './store-context'
+import { StoreContext, type BuilderDraft, type ConfirmRequest, type SortKey, type Store, type ToastState } from './store-context'
 import type { ApplyResponse, Preset, RegistryResponse, RuleInstance, Ruleset, Track } from './types'
 import { dirOf, joinPath } from './utils'
 
@@ -23,7 +24,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [search, setSearch] = useState('')
   // null = no sorting: tracks appear in the order they were found in the
-  // folder (Finder order). Sorting kicks in on the first column click.
+  // folder (file-manager order). Sorting kicks in on the first column click.
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<1 | -1>(1)
 
@@ -38,6 +39,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [applyReview, setApplyReview] = useState<ApplyResponse | null>(null)
   const [applying, setApplying] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null)
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -49,6 +51,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setToast((current) => (current && current.id === id ? null : current))
     }, 4200)
   }, [])
+
+  // Ask before a destructive action. Resolves false when the user dismisses the
+  // dialog by any route, so callers can use a plain `if (!ok) return`.
+  //
+  // A second request replaces the first and resolves it false: nothing in the
+  // UI can raise two at once, but a dropped promise would hang the caller
+  // forever, and hanging is worse than the wrong answer here.
+  const confirm = useCallback(
+    (request: Omit<ConfirmRequest, 'resolve'>) =>
+      new Promise<boolean>((resolve) => {
+        setConfirmRequest((previous) => {
+          previous?.resolve(false)
+          return { ...request, resolve }
+        })
+      }),
+    [],
+  )
 
   const init = useCallback(async () => {
     // The engine (a bundled sidecar in the packaged app) may still be starting.
@@ -445,7 +464,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [showToast, upsertTrack],
   )
 
-  // Apply an image that is already on disk as cover art (Finder drop or the
+  // Apply an image that is already on disk as cover art (a file-manager drop or the
   // native image picker). Avoids base64 entirely.
   const setCoverFromFile = useCallback(
     async (path: string, imagePath: string) => {
@@ -655,6 +674,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deletePreset,
       importPresets,
       showToast,
+      confirm,
     }),
     [
       registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError, engineStarting, configDir,
@@ -666,9 +686,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeRule, toggleRule, reorderRules, openEdit,
       closeEdit, writeFields, setCover, setCoverFromFile, removeCover,
       startApply, confirmApply, cancelApply, savePreset, loadPreset,
-      deletePreset, importPresets, showToast,
+      deletePreset, importPresets, showToast, confirm,
     ],
   )
 
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+  // The confirmation dialog is owned here rather than by a component: `confirm`
+  // is a store action, and keeping the dialog next to the state that backs it
+  // means a caller cannot ask without a dialog being mounted to answer.
+  return (
+    <StoreContext.Provider value={value}>
+      {children}
+      <ConfirmDialog state={confirmRequest} onClose={() => setConfirmRequest(null)} />
+    </StoreContext.Provider>
+  )
 }

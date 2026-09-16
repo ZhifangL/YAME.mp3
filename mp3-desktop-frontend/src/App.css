@@ -42,11 +42,13 @@
   -webkit-app-region: drag;
 }
 
-/* Packaged app: macOS draws the traffic lights inside this bar, so the row
-   starts after them — same line, same height, just indented. The lights end
-   around x=72; 96px leaves a comfortable gap. `applyHostClass()` adds
-   .host-tauri to <html> only inside the Tauri webview. */
-.host-tauri .titlebar {
+/* Packaged macOS app: macOS keeps its native traffic lights inside this bar, so
+   the row starts after them — same line, same height, just indented. The lights
+   end around x=72; 96px leaves a comfortable gap. Windows and Linux have no
+   traffic lights, and their title bar sits outside the webview entirely, so
+   they keep the plain 16px padding from `.titlebar`. `applyHostClass()` adds
+   `host-macos` only when the shell reports macOS. */
+.host-macos .titlebar {
   padding-left: 96px;
 }
 
@@ -1668,3 +1670,54 @@ table.tracks {
   from { opacity: 0; transform: translate(-50%, 6px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* ---------------------------------------------------------- confirm dialog */
+
+/* Compact enough to read as a message box rather than a document. Sits above
+   the other overlays because it can be raised from inside one (discarding
+   unsaved changes from the edit window). */
+.confirm-backdrop { z-index: 60; }
+
+.confirm-modal {
+  width: 400px;
+  max-width: calc(100vw - 48px);
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  overflow: hidden;
+}
+
+.confirm-body { padding: 16px 18px 4px; }
+
+.confirm-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.confirm-message {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 18px 16px;
+}
+
+.confirm-actions .text-btn { height: 32px; padding: 0 16px; }
+
+/* A destructive confirm reads as the primary action but is not the brand
+   purple; keeping `save-btn`'s shape means only the colour changes. */
+.save-btn.danger-btn {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.save-btn.danger-btn:hover:not(:disabled) { background: var(--danger); filter: brightness(0.92); }

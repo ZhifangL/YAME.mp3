@@ -3,11 +3,14 @@
 //! The window is built here rather than declared in `tauri.conf.json` so the
 //! engine's origin can be injected as an initialization script — it has to be
 //! in place before any page code runs.
+mod apps;
 mod engine;
 #[cfg(target_os = "macos")]
 mod macos;
 mod menu;
 mod platform;
+#[cfg(target_os = "windows")]
+mod windows;
 
 use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 
@@ -32,9 +35,15 @@ pub fn run() {
             // Picked before the webview exists, so the UI knows where to look
             // from its very first request. It polls /api/health until the
             // engine is up, which lets the window appear immediately.
+            //
+            // The platform goes across in the same script so the frontend can
+            // style itself for the host it is on, rather than guessing from the
+            // user agent.
             let script = format!(
-                "window.__YAME_ENGINE__ = {{ origin: {:?} }};",
-                engine.origin
+                "window.__YAME_ENGINE__ = {{ origin: {:?} }};\n\
+                 window.__YAME_PLATFORM__ = {:?};",
+                engine.origin,
+                std::env::consts::OS
             );
 
             #[allow(unused_mut)]
@@ -52,12 +61,13 @@ pub fn run() {
                 builder = builder
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
                     .hidden_title(true);
-
-                // A real menu bar: File > Open Files… / Add Files…, plus the
-                // standard Edit and Window menus macOS users expect.
-                let app_menu = menu::build_app_menu(app.handle())?;
-                app.set_menu(app_menu)?;
             }
+
+            // A real menu bar on every platform: File > Open Files… / Add
+            // Files…, the standard Edit and Window menus, and Help. Only the
+            // contents differ per platform (see `menu::build_app_menu`).
+            let app_menu = menu::build_app_menu(app.handle())?;
+            app.set_menu(app_menu)?;
 
             builder.build()?;
             app.manage(engine);

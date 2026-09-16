@@ -8,9 +8,10 @@ use std::process::Command;
 
 use tauri::AppHandle;
 
+use crate::apps;
+
 #[cfg(target_os = "macos")]
 use crate::macos;
-
 /// Run a helper and return its stdout, or an error carrying stderr.
 /// Absolute, symlink-resolved form of a path.
 ///
@@ -81,17 +82,12 @@ pub async fn open_default(path: String) -> Result<(), String> {
 }
 
 /// Applications that can open `path`, for the "Open With" submenu.
+///
+/// Returns an empty list on a platform with no enumeration yet — the menu
+/// builder omits the submenu rather than showing an empty one.
 #[tauri::command]
-pub fn apps_for_file(path: String) -> Vec<macos::AppChoice> {
-    #[cfg(target_os = "macos")]
-    {
-        return macos::recommended_apps(&path);
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = path;
-        Vec::new()
-    }
+pub fn apps_for_file(path: String) -> Vec<apps::AppChoice> {
+    apps::recommended_apps(&path)
 }
 
 /// Open `path` with a specific application bundle.
@@ -100,12 +96,14 @@ pub async fn open_with_app(path: String, app_path: String) -> Result<(), String>
     if !std::path::Path::new(&path).exists() {
         return Err(format!("File does not exist: {path}"));
     }
+    // Each platform knows what counts as something it can hand a file to: a
+    // bundle on macOS, an executable on Windows.
+    if !apps::is_application(&app_path) {
+        return Err(format!("Not an application: {app_path}"));
+    }
 
     #[cfg(target_os = "macos")]
     {
-        if !macos::is_application(&app_path) {
-            return Err(format!("Not an application: {app_path}"));
-        }
         // `open -a` is the supported way to launch a specific bundle, and it
         // handles quarantine, LaunchServices registration and already-running
         // apps the same way Finder does.
@@ -114,8 +112,9 @@ pub async fn open_with_app(path: String, app_path: String) -> Result<(), String>
 
     #[cfg(target_os = "windows")]
     {
-        let _ = app_path;
-        Err("Opening with a chosen application is not implemented on Windows yet".into())
+        // Windows has no "open with -a" equivalent: the documented route is the
+        // shell's Open With dialog, which is what the file manager shows.
+        return crate::windows::open_with(&app_path, &path);
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

@@ -1,25 +1,56 @@
 // Runtime environment detection.
 //
 // The packaged Tauri build injects `window.__YAME_ENGINE__` (the sidecar's
-// origin) from the Rust shell, which reads the port the engine publishes. In
-// the browser dev build none of this exists and the Vite proxy serves /api,
-// so the defaults below keep dev working unchanged.
+// origin) and `window.__YAME_PLATFORM__` from the Rust shell. In the browser
+// dev build neither exists and the Vite proxy serves /api, so the defaults
+// below keep dev working unchanged.
 
 export interface EngineBridge {
   /** e.g. "http://127.0.0.1:8000" — no trailing slash. */
   origin: string
 }
 
+/** What Rust reports through `std::env::consts::OS`. */
+export type HostPlatform = 'macos' | 'windows' | 'linux'
+
 declare global {
   interface Window {
     __TAURI_INTERNALS__?: unknown
     __YAME_ENGINE__?: EngineBridge
+    __YAME_PLATFORM__?: string
   }
 }
 
 /** True inside the Tauri webview (the same check the plugins use). */
 export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+}
+
+/**
+ * Which desktop platform the shell is running on, or null in a browser.
+ *
+ * Read from the value Rust injects rather than sniffed from the user agent:
+ * in a webview the user agent lies about the platform on purpose (WebKit on
+ * macOS reports "Macintosh" for compatibility, WebView2 reports "Windows NT"),
+ * and a wrong answer here changes window chrome and wording.
+ */
+export function hostPlatform(): HostPlatform | null {
+  if (typeof window === 'undefined') return null
+  const raw = window.__YAME_PLATFORM__
+  if (raw === 'macos' || raw === 'windows' || raw === 'linux') return raw
+  return null
+}
+
+/** Wording for the platform's file manager. */
+export function fileManagerName(): string {
+  switch (hostPlatform()) {
+    case 'windows':
+      return 'Explorer'
+    case 'macos':
+      return 'Finder'
+    default:
+      return 'your file manager'
+  }
 }
 
 /**
@@ -36,8 +67,19 @@ export function apiBase(): string {
   return '/api'
 }
 
-/** Reflect the host environment on <html> so CSS can adapt (window chrome). */
+/**
+ * Reflect the host environment on <html> so CSS can adapt (window chrome).
+ *
+ * `host-tauri` says "inside the desktop shell"; the per-platform class says
+ * which one, because the window chrome differs: macOS keeps its traffic lights
+ * inside our header, Windows and Linux draw their own title bar outside it.
+ */
 export function applyHostClass(): void {
   if (typeof document === 'undefined') return
-  document.documentElement.classList.toggle('host-tauri', isTauri())
+  const root = document.documentElement
+  const platform = hostPlatform()
+  root.classList.toggle('host-tauri', isTauri())
+  for (const name of ['macos', 'windows', 'linux'] as const) {
+    root.classList.toggle('host-' + name, platform === name)
+  }
 }

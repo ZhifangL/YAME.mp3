@@ -29,15 +29,39 @@ export function yearOf(track: { fields: Record<string, string> }): string {
   return m ? m[0] : ''
 }
 
-/** Directory part of a path ('' when the path has no separator). */
-export function dirOf(path: string): string {
-  const idx = path.lastIndexOf('/')
-  return idx === -1 ? '' : path.slice(0, idx)
+/**
+ * The separator a path is written with: "\\" on Windows, "/" elsewhere.
+ *
+ * Windows paths are not always uniformly backslashed — a user typing
+ * `C:/Music/song.mp3` is describing the same file — so this looks at the last
+ * separator present rather than deciding from the first drive letter.
+ */
+function separatorOf(path: string): '/' | '\\' {
+  return path.lastIndexOf('\\') > path.lastIndexOf('/') ? '\\' : '/'
 }
 
-/** Join a directory and a file name with exactly one separator. */
+/** Directory part of a path ('' when the path has no separator). */
+export function dirOf(path: string): string {
+  const idx = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+  if (idx > 0) return path.slice(0, idx)
+  if (idx === 0) return path[0] === '\\' ? '\\' : ''
+  return ''
+}
+
+/**
+ * Join a directory and a file name with exactly one separator.
+ *
+ * The separator follows the directory, so a Windows folder stays a Windows
+ * path. Getting this wrong is not cosmetic: the apply flow rebuilds each
+ * renamed file's path with this function before re-reading it, and a
+ * mis-joined path reads back as "file not found".
+ */
 export function joinPath(dir: string, name: string): string {
-  return dir ? dir.replace(/\/+$/, '') + '/' + name : name
+  if (!dir) return name
+  const trimmed = dir.replace(/[/\\]+$/, '')
+  // A bare root ("/", "C:\\", "\\\\") must not be trimmed into nothing.
+  if (!trimmed && !/^[a-zA-Z]:$/.test(dir)) return dir + name
+  return trimmed + separatorOf(dir) + name
 }
 
 export interface ImagePayload {

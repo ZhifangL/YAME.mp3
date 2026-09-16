@@ -39,6 +39,26 @@ export interface ToastState {
   kind: 'info' | 'success' | 'error'
 }
 
+/**
+ * One pending confirmation.
+ *
+ * `window.confirm` is not dependable inside a Tauri webview — if it returns
+ * false without showing anything, a destructive action silently does nothing.
+ * The app therefore asks through its own dialog, which also matches the rest of
+ * the UI instead of looking like a browser artefact.
+ */
+export interface ConfirmRequest {
+  title: string
+  message?: string
+  /** Defaults to "OK". */
+  confirmLabel?: string
+  /** Defaults to "Cancel". */
+  cancelLabel?: string
+  /** Styles the confirm button as destructive. */
+  danger?: boolean
+  resolve: (value: boolean) => void
+}
+
 export interface Store {
   registry: RegistryResponse | null
   presets: Preset[]
@@ -109,6 +129,12 @@ export interface Store {
   importPresets: (entries: { id?: string; name: string; ruleset: Ruleset }[]) => Promise<number>
 
   showToast: (text: string, kind?: ToastState['kind']) => void
+
+  /**
+   * Ask the user to confirm something destructive. Resolves false when they
+   * dismiss it in any way, so callers can guard with a plain `if (!ok) return`.
+   */
+  confirm: (request: Omit<ConfirmRequest, 'resolve'>) => Promise<boolean>
 }
 
 export const StoreContext = createContext<Store | null>(null)

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { copyFiles, openWithDefault, pasteFiles, revealInFinder } from '../desktop'
+import { copyFiles, openWithDefault, pasteFiles, revealPath } from '../desktop'
+import { fileManagerName } from '../env'
 import { pickMusic } from '../pickers-helpers'
 import { invoke } from '../tauri'
 import { useMenuEvents } from '../useMenuEvents'
@@ -177,7 +178,7 @@ export function TrackTable() {
   // The Edit menu's Copy/Paste are real macOS menu items, so their Cmd+C /
   // Cmd+V accelerators are handled by AppKit before any keydown reaches us.
   // Implementing the DOM copy/paste events is therefore the correct place to
-  // hook: it also routes by focus, exactly like Finder — text fields keep
+  // hook: it also routes by focus, exactly like the file manager — text fields keep
   // their own copy/paste, the track list copies files.
   useEffect(() => {
     const inTextField = () => {
@@ -564,7 +565,7 @@ export function TrackTable() {
           removeTrack(path)
           break
         case 'finder':
-          await revealInFinder(path)
+          await revealPath(path)
           break
       }
     } catch (err) {
@@ -831,7 +832,7 @@ export function TrackTable() {
           <button onClick={() => rowAction('paste')}>Paste</button>
           <div className="freeze-divider" />
           <button onClick={() => rowAction('remove')}>Remove from list</button>
-          <button onClick={() => rowAction('finder')}>Show in Finder</button>
+          <button onClick={() => rowAction('finder')}>{'Show in ' + fileManagerName()}</button>
         </div>
       )}
     </div>

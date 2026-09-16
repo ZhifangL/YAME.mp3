@@ -11,7 +11,7 @@ import {
   openWithDefault,
   pasteFiles,
   pickApplication,
-  revealInFinder,
+  revealPath,
 } from './desktop'
 import { pickMusic } from './pickers-helpers'
 import { useStore } from './store-context'
@@ -107,7 +107,7 @@ export function useMenuEvents(
             if (target) s.removeTrack(target)
             return
           case id === 'reveal':
-            if (target) await revealInFinder(target)
+            if (target) await revealPath(target)
             return
           default:
             return

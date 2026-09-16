@@ -21,7 +21,8 @@
     "active": true,
     "targets": [
       "app",
-      "dmg"
+      "dmg",
+      "nsis"
     ],
     "icon": [
       "icons/32x32.png",
@@ -41,6 +42,14 @@
       "minimumSystemVersion": "10.15",
       "signingIdentity": "-",
       "entitlements": "entitlements.plist"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ]
+      }
     },
     "linux": {
       "deb": {
