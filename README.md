@@ -19,7 +19,7 @@ as a preset for next time.
   | Rule | What it does | Example |
   | --- | --- | --- |
   | CLEAR | Removes a field's value | Clear Comment |
-  | REPLACE | Find & replace with `*` / `?` wildcards and `$1` back-references | Replace ` - ` with ` – ` in Title |
+  | REPLACE | Find & replace with `*` / `?` wildcards | Replace ` - ` with ` – ` in Title |
   | WRITE | Overwrites a field with a fixed value | Write J-Pop to Genre |
   | APPEND | Adds text to the end of a field | Append ` (Live)` to Title |
   | COPY FROM | Copies one field (or the file name) into another | Copy Year → Album |
@@ -144,8 +144,14 @@ next milestone:
   sidebar is always visible, the table is read-first, and manual edits are
   available for the exceptions rather than the rule.
 - Wildcards: `*` matches any run of characters, `?` matches exactly one.
-  In REPLACE, each wildcard in **Find** captures; use `$1`, `$2`… in
-  **Replace with** to insert them.
+  REPLACE treats **Replace with** literally (there are no capture references);
+  to move part of a value into a field, use PARSE FILENAME, which assigns each
+  `*` capture to a field through a dropdown.
+- A rule must be complete before it can be committed: REPLACE needs a **Find**
+  pattern (an empty one would match everywhere), and PARSE FILENAME needs a
+  pattern plus at least one capture assigned to a field. The engine reports
+  these requirements as `required` params in `/api/rules/registry`, and the
+  rule builder keeps its button disabled until they are met.
 
 ## License
 

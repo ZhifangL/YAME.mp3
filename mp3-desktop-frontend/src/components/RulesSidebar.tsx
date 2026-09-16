@@ -34,6 +34,9 @@ export function RulesSidebar() {
   const applyTarget = selectedPaths.length > 0 ? selectedPaths.length : tracks.length
   const activePreset = presets.find((p) => p.id === activePresetId) ?? null
   const headerLabel = activePreset ? activePreset.name : 'Your ruleset'
+  // Rules transform real files and preview against them, so with nothing
+  // loaded there is nothing to build a rule against.
+  const hasMusic = tracks.length > 0
 
   return (
     <aside className="sidebar">
@@ -56,17 +59,23 @@ export function RulesSidebar() {
               <div className="builder-title">
                 <span className="kicker">New rule</span>
               </div>
-              <div className="rule-menu">
+              <div className={'rule-menu' + (hasMusic ? '' : ' disabled')}>
                 {(registry?.specs ?? []).map((spec) => (
                   <button
                     key={spec.type}
+                    disabled={!hasMusic}
                     onClick={() => setDraft({ ruleId: null, type: spec.type, params: defaultParams(spec.params) })}
-                    title={spec.description}
+                    title={hasMusic ? spec.description : 'Add music first — rules are built against your tracks'}
                   >
                     {spec.label}
                   </button>
                 ))}
               </div>
+              {!hasMusic && (
+                <p className="field-help" style={{ margin: 0, lineHeight: 1.5 }}>
+                  Add music to start building rules.
+                </p>
+              )}
             </div>
           )}
         </div>

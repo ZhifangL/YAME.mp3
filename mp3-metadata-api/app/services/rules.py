@@ -9,9 +9,13 @@ The user-facing one-line summary of a rule ("Replace " - " with " – " in
 Title") is built in the frontend from that same schema (see src/rules.ts);
 this module deliberately holds no second copy of those strings.
 
+Params may set "required": True. That flag is advisory -- the engine still
+guards itself -- but it is what the UI reads to keep its commit button
+disabled until the rule is complete.
+
 Wildcard syntax: * matches any run of characters, ? matches exactly one.
-In REPLACE the "find" pattern supports wildcards and the replacement
-supports $1..$9 back-references to those captures.
+REPLACE substitutes the replacement text literally (no capture references:
+PARSE FILENAME is the tool for moving parts of a value between fields).
 In PARSE FILENAME each * or ? in the pattern captures one group and the
 user assigns capture groups to fields.
 """
@@ -33,7 +37,7 @@ def glob_to_regex(pattern: str, *, case_sensitive: bool = True, anchored: bool =
     """Translate a * / ? wildcard pattern into a compiled regex.
 
     Every * becomes a capturing group (.*) and every ? a capturing group (.),
-    so $1..$9 back-references refer to wildcards in order of appearance.
+    so PARSE FILENAME can address each wildcard by its group number.
     """
     out: list[str] = []
     for ch in pattern:
@@ -54,19 +58,6 @@ def glob_to_regex(pattern: str, *, case_sensitive: bool = True, anchored: bool =
 
 def count_captures(pattern: str) -> int:
     return pattern.count("*") + pattern.count("?")
-
-
-def substitute_backrefs(template: str, match: "re.Match") -> str:
-    """Expand $1..$9 back-references in template from a match's groups."""
-
-    def repl(m: "re.Match") -> str:
-        idx = int(m.group(1))
-        try:
-            return match.group(idx) or ""
-        except IndexError:
-            return m.group(0)
-
-    return re.sub(r"\$(\d)", repl, template)
 
 
 # ------------------------------------------------------------------ context
@@ -178,22 +169,26 @@ class ReplaceRule(Rule):
     description = "Find text (with * / ? wildcards) and replace it."
     params = [
         {"name": "field", "label": "In field", "kind": "field", "default": "title"},
-        {"name": "find", "label": "Find", "kind": "text", "placeholder": " - ",
-         "help": "Use * for any characters, ? for a single character."},
-        {"name": "replace", "label": "Replace with", "kind": "text", "placeholder": " – ",
-         "help": "Use $1, $2, ... to insert the wildcard captures."},
+        {"name": "find", "label": "Find", "kind": "text", "required": True,
+         "placeholder": " - ", "help": "Use * for any characters, ? for a single character."},
+        {"name": "replace", "label": "Replace with", "kind": "text", "placeholder": " – "},
         {"name": "case_sensitive", "label": "Case sensitive", "kind": "bool", "default": True},
     ]
 
     def apply(self, ctx, params):
         key = params.get("field") or ""
-        find = params.get("find")
+        find = params.get("find") or ""
         replace = params.get("replace") or ""
-        if key not in RULE_FIELD_KEYS or find is None:
+        # An empty Find matches at every position, which would splice the
+        # replacement between every character and shred the value. Treat an
+        # incomplete rule as a no-op rather than a destructive edit.
+        if key not in RULE_FIELD_KEYS or not find:
             return []
         before = ctx.get(key)
         regex = glob_to_regex(find, case_sensitive=bool(params.get("case_sensitive", True)), anchored=False)
-        after = regex.sub(lambda m: substitute_backrefs(replace, m), before)
+        # A function replacement keeps the text literal: re.sub() would
+        # otherwise interpret backslashes and \g<...> escapes inside it.
+        after = regex.sub(lambda _match: replace, before)
         ctx.set(key, after)
         change = self._changed(key, before, after)
         return [change] if change else []
@@ -268,11 +263,13 @@ class ParseFilenameRule(Rule):
     label = "Parse Filename"
     description = "Fill in fields based on filename pattern"
     params = [
-        {"name": "pattern", "label": "Pattern", "kind": "parse_pattern", "placeholder": "Artist - Title",
+        {"name": "pattern", "label": "Pattern", "kind": "parse_pattern", "required": True,
+         "placeholder": "Artist - Title",
          "help": "Each * captures a chunk of the file name. Assign each capture to a field below."},
         {"name": "include_extension", "label": "Include extension", "kind": "bool", "default": False},
         # assignments is a dict {capture_index: field_key}, produced by the parse_pattern editor.
-        {"name": "assignments", "label": "Assignments", "kind": "parse_assignments", "default": {}},
+        {"name": "assignments", "label": "Assignments", "kind": "parse_assignments",
+         "required": True, "default": {}},
     ]
 
     def apply(self, ctx, params):

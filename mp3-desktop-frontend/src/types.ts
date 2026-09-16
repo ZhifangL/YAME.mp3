@@ -61,6 +61,8 @@ export interface RuleParamSpec {
   default: unknown
   placeholder: string | null
   help: string | null
+  /** The rule cannot be committed until this param is filled in. */
+  required: boolean
 }
 
 export interface RuleSpec {

@@ -259,7 +259,9 @@
   appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
     linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
-  background-position: calc(100% - 14px) 12px, calc(100% - 10px) 12px;
+  /* Vertically centred, so every select looks the same whatever its height
+     (an absolute offset left the chevron high on taller controls). */
+  background-position: calc(100% - 14px) center, calc(100% - 10px) center;
   background-size: 4px 4px, 4px 4px;
   background-repeat: no-repeat;
   padding-right: 24px;
@@ -334,6 +336,29 @@
   border-color: var(--danger);
 }
 
+/* Primary commit button — shared by the edit window, "Save as preset" and the
+   apply review dialog, so it must not be scoped to any one footer. */
+.save-btn {
+  background: var(--purple-primary);
+  border: 1px solid var(--purple-primary);
+  color: var(--text-inverse);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  height: 32px;
+  padding: 0 20px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  box-shadow: var(--shadow-button);
+}
+
+.save-btn:hover:not(:disabled) { background: var(--purple-deep); }
+
+.save-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .image-pick-row {
   display: flex;
   align-items: center;
@@ -368,10 +393,12 @@
   padding: 6px 2px 0;
 }
 
+/* Same control as the rule-builder selects, and the same size, so the sidebar
+   reads as one system rather than three. */
 .preset-select {
-  height: 24px;
+  height: 28px;
   width: 150px;
-  font-size: 11.5px;
+  font-size: 13px;
 }
 
 .rule-menu {
@@ -392,9 +419,16 @@
   cursor: pointer;
 }
 
-.rule-menu button:hover {
+.rule-menu button:hover:not(:disabled) {
   border-color: var(--purple-accent);
   color: var(--purple-primary);
+}
+
+/* No music loaded: the rule types are visible (so the feature is discoverable)
+   but cannot be started. */
+.rule-menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .rules-list {
@@ -678,24 +712,6 @@ table.tracks {
   background: var(--surface-1);
 }
 
-.tracks.frozen-pane tbody tr:nth-child(even) th,
-.tracks.frozen-pane tbody tr:nth-child(even) td {
-  background: var(--surface-0);
-}
-
-.tracks.frozen-pane tbody tr.selected th,
-.tracks.frozen-pane tbody tr.selected td,
-.tracks.frozen-pane tbody tr.selected:nth-child(even) td {
-  background: var(--purple-accent);
-}
-
-.tracks.frozen-pane tbody tr.hover td,
-.tracks.frozen-pane tbody tr.selected.hover td,
-.tracks tbody tr.hover td,
-.tracks tbody tr.selected.hover td {
-  background: var(--purple-tint);
-}
-
 .tracks tbody td {
   height: 30px;
   padding: 0 10px;
@@ -706,17 +722,51 @@ table.tracks {
   color: var(--text-main);
 }
 
-.tracks tbody tr:nth-child(even) td { background: var(--surface-0); }
-
-.tracks tbody tr.selected td { background: var(--purple-accent); }
-
-.tracks tbody tr.selected:nth-child(even) td { background: var(--purple-accent); }
-
-.tracks tbody tr.selected:hover td { background: var(--purple-primary); }
-
 .tracks tbody td.muted { color: var(--text-muted); }
 
-.tracks tbody tr.selected td.muted { color: rgba(255, 255, 255, 0.75); }
+/* Row states.
+   The frozen pane is a second <table> stacked over the scrolling one, so any
+   state that applies to a row has to be written for both panes with the same
+   selectors — otherwise the sticky column disagrees with the rest of the row.
+   Zebra striping is scoped to rows that are neither selected nor hovered so it
+   can never win over them on specificity. */
+.tracks.frozen-pane tbody tr:nth-child(even):not(.selected):not(.hover) td,
+.tracks tbody tr:nth-child(even):not(.selected):not(.hover) td {
+  background: var(--surface-0);
+}
+
+.tracks.frozen-pane tbody tr.selected td,
+.tracks tbody tr.selected td {
+  background: var(--purple-accent);
+}
+
+.tracks.frozen-pane tbody tr.selected.hover td,
+.tracks.frozen-pane tbody tr.selected:hover td,
+.tracks tbody tr.selected.hover td,
+.tracks tbody tr.selected:hover td {
+  background: var(--purple-primary);
+}
+
+.tracks.frozen-pane tbody tr.hover:not(.selected) td,
+.tracks.frozen-pane tbody tr:hover:not(.selected) td,
+.tracks tbody tr.hover:not(.selected) td,
+.tracks tbody tr:hover:not(.selected) td {
+  background: var(--purple-tint);
+}
+
+/* Selected rows read white-on-purple. Secondary (empty) cells step down
+   slightly instead of dropping to grey, which would disappear on purple. */
+.tracks.frozen-pane tbody tr.selected td,
+.tracks tbody tr.selected td {
+  color: var(--text-inverse);
+  font-weight: 500;
+}
+
+.tracks.frozen-pane tbody tr.selected td.muted,
+.tracks tbody tr.selected td.muted {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 400;
+}
 
 .tracks th:first-child,
 .tracks td:first-child {
@@ -1210,26 +1260,6 @@ table.tracks {
 }
 
 .overlay-footer .text-btn { height: 32px; padding: 0 18px; }
-
-.overlay-footer .save-btn {
-  background: var(--purple-primary);
-  border: 1px solid var(--purple-primary);
-  color: var(--text-inverse);
-  font-size: 13px;
-  font-weight: 600;
-  height: 32px;
-  padding: 0 20px;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  box-shadow: var(--shadow-button);
-}
-
-.overlay-footer .save-btn:hover { background: var(--purple-deep); }
-
-.overlay-footer .save-btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
 
 .overlay-resize {
   position: absolute;

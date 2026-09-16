@@ -11,7 +11,6 @@ from app.services.rules import (
     glob_to_regex,
     registry_specs,
     run_ruleset,
-    substitute_backrefs,
 )
 
 
@@ -32,11 +31,10 @@ def apply(rule_type: str, params: dict, context: RuleContext | None = None) -> l
 
 # ------------------------------------------------------------------ wildcards
 
-def test_star_captures_and_backrefs():
-    regex = glob_to_regex("* - *", anchored=True)
-    match = regex.match("Artist - Title")
+def test_star_captures_each_side_of_a_separator():
+    match = glob_to_regex("* - *", anchored=True).match("Artist - Title")
     assert match is not None
-    assert substitute_backrefs("$2 by $1", match) == "Title by Artist"
+    assert (match.group(1), match.group(2)) == ("Artist", "Title")
 
 
 def test_question_mark_matches_exactly_one_character():
@@ -60,9 +58,12 @@ def test_case_insensitive_flag():
     assert glob_to_regex("live", case_sensitive=True).search("LIVE") is None
 
 
-def test_out_of_range_backref_is_left_literal():
-    match = glob_to_regex("*").match("x")
-    assert substitute_backrefs("[$9]", match) == "[$9]"
+def test_dollar_is_an_ordinary_character():
+    """REPLACE has no capture references, so $ is literal on both sides."""
+    assert glob_to_regex("$5", anchored=True).match("$5")
+    context = ctx(title="price $5")
+    apply("REPLACE", {"field": "title", "find": "$5", "replace": "$6"}, context)
+    assert context.fields["title"] == "price $6"
 
 
 def test_count_captures():
@@ -95,20 +96,56 @@ def test_clear_ignores_unknown_fields():
     assert apply("CLEAR", {"field": "not_a_field"}, ctx(comment="hi")) == []
 
 
-def test_replace_literal_and_backrefs():
+def test_replace_substitutes_a_literal_string():
     context = ctx(title="Artist - Title")
-    changes = apply("REPLACE", {"field": "title", "find": "* - *", "replace": "$2 - $1"}, context)
-    assert context.fields["title"] == "Title - Artist"
+    changes = apply("REPLACE", {"field": "title", "find": " - ", "replace": " – "}, context)
+    assert context.fields["title"] == "Artist – Title"
     assert changes == [{
         "field": "title", "label": "Title",
-        "before": "Artist - Title", "after": "Title - Artist",
+        "before": "Artist - Title", "after": "Artist – Title",
     }]
+
+
+def test_replace_wildcards_match_without_capture_references():
+    """Wildcards still match; the replacement is used verbatim."""
+    context = ctx(title="Song (Official Audio)")
+    apply("REPLACE", {"field": "title", "find": " (*", "replace": ""}, context)
+    assert context.fields["title"] == "Song"
+
+    context = ctx(title="Artist - Title")
+    apply("REPLACE", {"field": "title", "find": "* - *", "replace": "$2 - $1"}, context)
+    assert context.fields["title"] == "$2 - $1"
+
+
+def test_replace_keeps_backslashes_literal():
+    """re.sub() would otherwise treat \\1 as a group reference."""
+    context = ctx(comment="a")
+    apply("REPLACE", {"field": "comment", "find": "a", "replace": r"\1\g<0>"}, context)
+    assert context.fields["comment"] == r"\1\g<0>"
 
 
 def test_replace_case_sensitivity():
     params = {"field": "title", "find": "live", "replace": "LIVE"}
     assert apply("REPLACE", {**params, "case_sensitive": False}, ctx(title="Live"))[0]["after"] == "LIVE"
     assert apply("REPLACE", {**params, "case_sensitive": True}, ctx(title="Live")) == []
+
+
+def test_replace_with_an_empty_find_does_nothing():
+    """Regression: an empty pattern matched at every position and spliced the
+    replacement between every character."""
+    context = ctx(title="Song")
+    assert apply("REPLACE", {"field": "title", "find": "", "replace": "-"}, context) == []
+    assert context.fields["title"] == "Song"
+
+    # Also for a missing key entirely (older saved presets).
+    assert apply("REPLACE", {"field": "title", "replace": "-"}, context) == []
+    assert context.fields["title"] == "Song"
+
+
+def test_replace_whitespace_only_find_is_still_a_pattern():
+    context = ctx(title="A B")
+    apply("REPLACE", {"field": "title", "find": " ", "replace": "_"}, context)
+    assert context.fields["title"] == "A_B"
 
 
 def test_replace_can_delete_a_match():

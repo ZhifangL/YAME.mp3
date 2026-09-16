@@ -5,18 +5,6 @@ import { useStore } from '../store-context'
 import type { ChangeRecord, RegistryResponse, RuleParamSpec, Track } from '../types'
 import { dirOf, readImageFile } from '../utils'
 
-const SAMPLE_TRACK = {
-  filename: 'Ado - Odo (128kbit_AAC).mp3',
-  folder: '/Music/Ado',
-  fields: {
-    title: 'Odo - Live',
-    artist: 'Ado',
-    album: 'Kyougen',
-    date: '2022',
-    comment: 'https://www.youtube.com/watch?v=x',
-  },
-}
-
 interface PreviewState {
   text: string
   hasChanges: boolean
@@ -29,17 +17,16 @@ export function RuleBuilder() {
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const spec = registry && draft ? specFor(registry, draft.type) : null
-  // Preview candidates in order: the selected tracks (in table order), then
-  // the first track, then a built-in sample. The engine returns the first
-  // candidate the rule actually changes.
+  // Preview candidates, in order: the selected tracks (in table order), then
+  // the first track. The engine reports the first candidate the rule changes.
+  // With nothing loaded there is no such thing as a preview, so we say so
+  // rather than inventing a sample track to preview against.
   const selectedTracks = tracks.filter((t) => selectedPaths.includes(t.file.path))
   const orderedCandidates: Track[] = [...selectedTracks]
   if (tracks.length) orderedCandidates.push(tracks[0])
-  const candidateList = orderedCandidates.length
-    ? orderedCandidates
-        .filter((t, i, all) => all.findIndex((x) => x.file.path === t.file.path) === i)
-        .slice(0, 20)
-    : []
+  const candidateList = orderedCandidates
+    .filter((t, i, all) => all.findIndex((x) => x.file.path === t.file.path) === i)
+    .slice(0, 20)
   const candidatesJson = JSON.stringify(
     candidateList.map((t) => ({
       filename: t.file.filename,
@@ -50,17 +37,18 @@ export function RuleBuilder() {
   )
   const draftType = draft?.type ?? ''
   const draftParamsJson = JSON.stringify(draft?.params)
-  const hasSample = candidateList.length > 0
+  // Previewing needs a track to preview against; without one the panel says so
+  // (derived at render time rather than stored, so no effect has to seed it).
+  const hasCandidates = candidateList.length > 0
 
   useEffect(() => {
     if (!draftType || !spec) return
     if (debounce.current) clearTimeout(debounce.current)
+    if (!hasCandidates) return
     debounce.current = setTimeout(() => {
       const rule = { id: 'preview', type: draftType, params: JSON.parse(draftParamsJson), enabled: true }
-      const run = hasSample
-        ? api.previewBatch(JSON.parse(candidatesJson), rule)
-        : api.preview(SAMPLE_TRACK.filename, SAMPLE_TRACK.folder, SAMPLE_TRACK.fields, rule)
-      run
+      api
+        .previewBatch(JSON.parse(candidatesJson), rule)
         .then((res) => {
           setPreview({
             text: formatPreview(res),
@@ -68,16 +56,19 @@ export function RuleBuilder() {
             error: false,
           })
         })
-        .catch(() => setPreview({ text: 'Preview unavailable — engine offline', hasChanges: false, error: true }))
+        .catch(() =>
+          setPreview({ text: 'Preview unavailable — engine offline', hasChanges: false, error: true }),
+        )
     }, 350)
     return () => {
       if (debounce.current) clearTimeout(debounce.current)
     }
-  }, [draftType, draftParamsJson, candidatesJson, hasSample, spec])
+  }, [draftType, draftParamsJson, candidatesJson, hasCandidates, spec])
 
   if (!registry || !draft || !spec) return null
 
-  const valid = validateDraft(registry, spec.params, draft.params)
+  // Why the rule cannot be committed yet (null when it is complete).
+  const problem = draftProblem(registry, spec.params, draft.params)
   const editing = Boolean(draft.ruleId)
 
   return (
@@ -108,7 +99,9 @@ export function RuleBuilder() {
         ))}
 
       <div className={'builder-preview' + (preview && !preview.hasChanges ? ' no-changes' : '')}>
-        {preview == null ? (
+        {!hasCandidates ? (
+          <span className="muted">Add music to preview this rule</span>
+        ) : preview == null ? (
           <span className="muted">Preview…</span>
         ) : preview.error ? (
           <span>{preview.text}</span>
@@ -125,7 +118,12 @@ export function RuleBuilder() {
         <button className="text-btn" onClick={cancelDraft}>
           Cancel
         </button>
-        <button className="text-btn primary" disabled={!valid} onClick={commitDraft} title={valid ? '' : 'Fill in the highlighted inputs'}>
+        <button
+          className="text-btn primary"
+          disabled={problem !== null}
+          onClick={commitDraft}
+          title={problem ?? (editing ? 'Apply the changes to this rule' : 'Add this rule to the ruleset')}
+        >
           {editing ? 'Done' : 'Add to ruleset'}
         </button>
       </div>
@@ -143,34 +141,52 @@ function formatPreview(res: { changes: ChangeRecord[]; filename: string }): stri
   return previewSummary(res.changes, res.filename)
 }
 
-function validateDraft(registry: RegistryResponse, params: RuleParamSpec[], values: Record<string, unknown>): boolean {
+/**
+ * Why this rule cannot be committed yet, or null when it is complete.
+ *
+ * Driven entirely by the engine's param `required` flags, so a new rule type
+ * gets the same treatment without touching this file. Returns a message the
+ * caller can show as the disabled button's tooltip.
+ */
+function draftProblem(registry: RegistryResponse, params: RuleParamSpec[], values: Record<string, unknown>): string | null {
   for (const p of params) {
     const v = values[p.name]
     switch (p.kind) {
       case 'field': {
-        if (typeof v !== 'string' || !registry.fields.some((f) => f.key === v)) return false
+        if (typeof v !== 'string' || !registry.fields.some((f) => f.key === v)) {
+          return 'Choose a field for "' + p.label + '".'
+        }
         break
       }
       case 'text':
       case 'choice': {
-        // empty text is allowed (e.g. REPLACE with '') but undefined is not
-        if (v == null) return false
+        if (v == null) return 'Fill in "' + p.label + '".'
+        // Replace-with may be empty (that deletes the match); Find may not.
+        if (p.required && !String(v).trim()) return 'Fill in "' + p.label + '".'
         break
       }
       case 'parse_pattern': {
-        if (typeof v !== 'string' || !v.trim()) return false
+        if (typeof v !== 'string' || !v.trim()) return 'Fill in the pattern.'
+        break
+      }
+      case 'parse_assignments': {
+        const assigned = v && typeof v === 'object'
+          ? Object.values(v as Record<string, unknown>).filter(Boolean)
+          : []
+        if (p.required && !assigned.length) return 'Assign at least one capture to a field.'
         break
       }
       case 'image': {
-        // An image is always required for Set Cover Art.
-        if (!(v && typeof v === 'object' && (v as { data_base64?: string }).data_base64)) return false
+        if (!(v && typeof v === 'object' && (v as { data_base64?: string }).data_base64)) {
+          return 'Choose a cover image.'
+        }
         break
       }
       default:
         break
     }
   }
-  return true
+  return null
 }
 
 function ParamEditor({ param }: { param: RuleParamSpec }) {

@@ -235,13 +235,28 @@ export function TrackTable() {
     resizeRef.current = null
   }
 
-  // Column reorder (drag the header body; HTML5 drag & drop). The insertion
-  // point is decided by which HALF of the hovered header the cursor is over,
-  // so dragging one column left or right works symmetrically.
+  // Column reorder (drag the header body; HTML5 drag & drop).
+  //
+  // A gap between two columns can be named two ways: "after A" or "before B".
+  // Drawing both would put two different-looking indicators on the same gap
+  // (A's right edge and B's left edge), so every gap is normalised to the
+  // "before B" form. Only the very last column in a pane keeps an "after",
+  // because there is no following column to point at.
   const [overKey, setOverKey] = useState<SortKey | null>(null)
   const [overSide, setOverSide] = useState<'before' | 'after' | null>(null)
   const frozenPaneRef = useRef<HTMLTableElement>(null)
   const mainPaneRef = useRef<HTMLTableElement>(null)
+
+  const normalizeInsertion = (
+    key: SortKey,
+    side: 'before' | 'after',
+  ): { key: SortKey; side: 'before' | 'after' } => {
+    if (side === 'before') return { key, side }
+    const cols = frozenSet.has(key) ? frozenCols : mainCols
+    const index = cols.findIndex((c) => c.key === key)
+    const next = index >= 0 ? cols[index + 1] : undefined
+    return next ? { key: next.key, side: 'before' } : { key, side: 'after' }
+  }
 
   // While a header drag is in flight, watch the whole window so drops that
   // land beyond the table edges (e.g. to the left of the first column) still
@@ -288,24 +303,30 @@ export function TrackTable() {
     window.addEventListener('dragover', onWindowDragOver)
     window.addEventListener('drop', onWindowDrop)
   }
+
+  // Which gap the cursor is currently over, in normalised form.
+  const insertionAt = (e: React.DragEvent, key: SortKey) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const side: 'before' | 'after' = e.clientX < rect.left + rect.width / 2 ? 'before' : 'after'
+    return normalizeInsertion(key, side)
+  }
+
   const onHeaderDragOver = (e: React.DragEvent, key: SortKey) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    const rect = e.currentTarget.getBoundingClientRect()
-    const side: 'before' | 'after' = e.clientX < rect.left + rect.width / 2 ? 'before' : 'after'
-    setOverKey(key)
-    setOverSide(side)
+    const insertion = insertionAt(e, key)
+    setOverKey(insertion.key)
+    setOverSide(insertion.side)
   }
   const onHeaderDrop = (e: React.DragEvent, key: SortKey) => {
     e.preventDefault()
     const dragKey = e.dataTransfer.getData('text/plain') as SortKey
     setOverKey(null)
     setOverSide(null)
-    // Decide the insertion side from the drop position itself (the dragover
+    // Decide the insertion gap from the drop position itself (the dragover
     // state may not have committed yet when drop lands right after it).
-    const rect = e.currentTarget.getBoundingClientRect()
-    const side: 'before' | 'after' = e.clientX < rect.left + rect.width / 2 ? 'before' : 'after'
-    if (dragKey && dragKey !== key) moveColumn(dragKey, key, side)
+    const insertion = insertionAt(e, key)
+    if (dragKey && dragKey !== insertion.key) moveColumn(dragKey, insertion.key, insertion.side)
   }
   const onHeaderDragEnd = () => {
     window.removeEventListener('dragover', onWindowDragOver)

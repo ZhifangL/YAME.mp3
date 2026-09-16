@@ -155,10 +155,35 @@ def test_preview_never_touches_files(client: TestClient):
         "filename": "Artist - Title.mp3",
         "folder": "/Music",
         "fields": {"title": "Artist - Title"},
-        "rule": {"type": "REPLACE", "params": {"field": "title", "find": "* - *", "replace": "$2 - $1"}},
+        "rule": {"type": "REPLACE", "params": {"field": "title", "find": " - ", "replace": " – "}},
     }).json()
-    assert body["changes"][0]["after"] == "Title - Artist"
+    assert body["changes"][0]["after"] == "Artist – Title"
     assert body["changes"][0]["label"] == "Title"
+
+
+def test_preview_reports_no_change_for_an_incomplete_replace(client: TestClient):
+    """An empty Find is incomplete, not a rule that shreds the value."""
+    body = client.post("/api/preview", json={
+        "filename": "a.mp3",
+        "folder": "/Music",
+        "fields": {"title": "Song"},
+        "rule": {"type": "REPLACE", "params": {"field": "title", "find": "", "replace": "-"}},
+    }).json()
+    assert body["changes"] == []
+    assert body["fields"]["title"] == "Song"
+
+
+def test_registry_marks_incomplete_prone_params_as_required(client: TestClient):
+    specs = {s["type"]: s for s in client.get("/api/rules/registry").json()["specs"]}
+    find = next(p for p in specs["REPLACE"]["params"] if p["name"] == "find")
+    assert find["required"] is True
+    # Replace-with may legitimately be empty (that deletes the match).
+    replace = next(p for p in specs["REPLACE"]["params"] if p["name"] == "replace")
+    assert replace["required"] is False
+
+    parse = {p["name"]: p for p in specs["PARSE FILENAME"]["params"]}
+    assert parse["pattern"]["required"] is True
+    assert parse["assignments"]["required"] is True
 
 
 def test_preview_batch_returns_the_first_matching_track(client: TestClient):

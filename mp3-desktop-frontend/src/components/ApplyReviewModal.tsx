@@ -7,6 +7,9 @@ export function ApplyReviewModal() {
   const changed = applyReview.results.filter((r) => r.changes.length > 0)
   const unchanged = applyReview.results.length - changed.length
   const errors = applyReview.results.filter((r) => r.error)
+  // Nothing to review at all: the empty-state message stands on its own, so the
+  // "N files left unchanged" tally underneath it would just be noise.
+  const nothingToDo = changed.length === 0 && errors.length === 0
 
   return (
     <div className="overlay-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !applying) cancelApply() }}>
@@ -41,10 +44,10 @@ export function ApplyReviewModal() {
               <div className="rf-error">{r.error}</div>
             </div>
           ))}
-          {changed.length === 0 && errors.length === 0 && (
+          {nothingToDo && (
             <div className="review-none">No files would change — adjust the rules and try again.</div>
           )}
-          {unchanged > 0 && (
+          {unchanged > 0 && !nothingToDo && (
             <p className="field-help" style={{ textAlign: 'center' }}>
               {unchanged} file{unchanged === 1 ? '' : 's'} left unchanged (rules did not match).
             </p>

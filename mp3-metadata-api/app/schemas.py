@@ -72,6 +72,8 @@ class RuleParamSpec(BaseModel):
     default: Any = None
     placeholder: Optional[str] = None
     help: Optional[str] = None
+    # The UI keeps its commit button disabled until every required param is set.
+    required: bool = False
 
 
 class RuleSpec(BaseModel):
