@@ -286,9 +286,12 @@ mod tests {
         assert!(block(copy_files_to_clipboard(vec!["/nope.mp3".into()])).is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_path_that_looks_like_a_flag_is_made_absolute() {
-        // `open` would otherwise read "-R" as its reveal flag.
+        // `open` would otherwise read "-R" as its reveal flag, and `xdg-open`
+        // needs a path rather than a bare name. Unix only: Windows deliberately
+        // does not canonicalise (it would produce a `\\?\` path).
         let resolved = absolute("/tmp/definitely-missing");
         assert!(resolved.starts_with('/'), "{resolved}");
     }
