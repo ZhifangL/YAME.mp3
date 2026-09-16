@@ -17,10 +17,11 @@ use crate::macos;
 /// Absolute, symlink-resolved form of a path.
 ///
 /// `open` parses its arguments as options, so a file literally named "-R"
-/// would be read as a flag, and a relative path would resolve against whatever
-/// the process's working directory happens to be. macOS only: see the Windows
-/// note in `open_default`.
-#[cfg(target_os = "macos")]
+/// would be read as a flag, and `xdg-open` needs a path rather than a bare
+/// name. Unix only: on Windows `canonicalize` returns a verbatim
+/// (`\\?\C:\...`) path that the shell takes badly, and the frontend already
+/// hands us absolute paths from the picker, a drop, or the engine.
+#[cfg(unix)]
 fn absolute(path: &str) -> String {
     std::fs::canonicalize(path)
         .map(|p| p.display().to_string())
