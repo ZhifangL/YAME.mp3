@@ -92,6 +92,12 @@ jobs:
       # test the Rust half.
       - name: Stub the sidecar
         run: node scripts/placeholder-sidecar.mjs
+      # NOTE (Windows): a debug build of the Tauri dependency tree takes longer
+      # than the release build the packaging job does — observed to exceed the
+      # job timeout on a cold cache, while `package-windows` (release, warm
+      # cache) finished in ~10 minutes. It compiles; it is just slow. If this
+      # job keeps timing out, the fix is to carry the cache between jobs rather
+      # than to raise the timeout again.
       - name: Build and test the shell
         working-directory: mp3-desktop-frontend/src-tauri
         run: cargo test --verbose
