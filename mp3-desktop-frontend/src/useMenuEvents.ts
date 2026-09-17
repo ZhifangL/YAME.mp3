@@ -39,16 +39,18 @@ export function useMenuEvents(
     removeTrack,
     showToast,
     showAbout,
+    undo,
+    redo,
   } = useStore()
 
   // The listener is registered once, so it reads state through a ref that is
   // refreshed after every render rather than closing over stale values.
   const latest = useRef({
-    tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, showAbout, onColumnMenu, focusSearch, menuTarget,
+    tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, showAbout, undo, redo, onColumnMenu, focusSearch, menuTarget,
   })
   useEffect(() => {
     latest.current = {
-      tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, showAbout, onColumnMenu, focusSearch, menuTarget,
+      tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, showAbout, undo, redo, onColumnMenu, focusSearch, menuTarget,
     }
   })
 
@@ -81,6 +83,12 @@ export function useMenuEvents(
             return
           case id === 'help.about':
             s.showAbout()
+            return
+          case id === 'edit.undo':
+            s.undo()
+            return
+          case id === 'edit.redo':
+            s.redo()
             return
           case id === 'open':
             if (!target) return

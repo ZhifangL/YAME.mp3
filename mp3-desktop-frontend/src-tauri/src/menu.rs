@@ -97,26 +97,36 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::me
         builder.build()?
     };
 
-    // Undo/Redo are unsupported on Windows and Linux; the rest of the Edit menu
-    // is what makes Ctrl+C/Ctrl+V work in the text fields.
+    // Undo/Redo: real items on every platform, because the predefined ones are
+    // macOS-only and would leave Windows with no undo at all. The accelerators
+    // differ by platform convention — Ctrl+Y redoes on Windows, Shift+Cmd+Z on
+    // macOS — and both are handled in the frontend, which knows which field has
+    // focus.
+    let undo = MenuItemBuilder::with_id("edit.undo", "Undo")
+        .accelerator("CmdOrCtrl+Z")
+        .build(app)?;
+
+    #[cfg(target_os = "macos")]
+    let redo_accelerator = "Cmd+Shift+Z";
+    #[cfg(not(target_os = "macos"))]
+    let redo_accelerator = "Ctrl+Y";
+    let redo = MenuItemBuilder::with_id("edit.redo", "Redo")
+        .accelerator(redo_accelerator)
+        .build(app)?;
+
     let cut = PredefinedMenuItem::cut(app, None)?;
     let copy = PredefinedMenuItem::copy(app, None)?;
     let paste = PredefinedMenuItem::paste(app, None)?;
     let select_all = PredefinedMenuItem::select_all(app, None)?;
-    let edit_menu = {
-        let builder = SubmenuBuilder::new(app, "Edit");
-        #[cfg(target_os = "macos")]
-        let builder = builder
-            .item(&PredefinedMenuItem::undo(app, None)?)
-            .item(&PredefinedMenuItem::redo(app, None)?)
-            .separator();
-        let builder = builder
-            .item(&cut)
-            .item(&copy)
-            .item(&paste)
-            .item(&select_all);
-        builder.build()?
-    };
+    let edit_menu = SubmenuBuilder::new(app, "Edit")
+        .item(&undo)
+        .item(&redo)
+        .separator()
+        .item(&cut)
+        .item(&copy)
+        .item(&paste)
+        .item(&select_all)
+        .build()?;
 
     let view_menu = SubmenuBuilder::new(app, "View")
         .item(

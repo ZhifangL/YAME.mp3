@@ -90,6 +90,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void confirm({ title: 'YAME.mp3', message, confirmLabel: 'Close' })
   }, [confirm, version, configDir])
 
+  /**
+   * Undo/redo.
+   *
+   * The browser already keeps a per-field undo stack for every text input, and
+   * on Windows Ctrl+Z reaches it natively — but Ctrl+Y does not, and the Edit
+   * menu needs something to call. `document.execCommand` drives that same stack
+   * and is the only way to reach it from here; React sees the resulting `input`
+   * event, so its controlled state stays in step.
+   *
+   * A screen with richer history takes over by registering a handler (see
+   * `registerHistory`).
+   */
+  const history = useRef<(() => boolean) | null>(null)
+
+  const undo = useCallback(() => {
+    if (history.current?.()) return
+    document.execCommand('undo')
+  }, [])
+
+  const redo = useCallback(() => {
+    if (history.current?.()) return
+    document.execCommand('redo')
+  }, [])
+
+  const registerHistory = useCallback((handler: (() => boolean) | null) => {
+    history.current = handler
+  }, [])
+
   const init = useCallback(async () => {
     // The engine (a bundled sidecar in the packaged app) may still be starting.
     const deadline = Date.now() + 30000
@@ -700,6 +728,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast,
       confirm,
       showAbout,
+      undo,
+      redo,
+      registerHistory,
     }),
     [
       registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError, engineStarting, configDir,
@@ -711,7 +742,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeRule, toggleRule, reorderRules, openEdit,
       closeEdit, writeFields, setCover, setCoverFromFile, removeCover,
       startApply, confirmApply, cancelApply, savePreset, loadPreset,
-      deletePreset, importPresets, showToast, confirm, showAbout,
+      deletePreset, importPresets, showToast, confirm, showAbout, undo, redo, registerHistory,
     ],
   )
 

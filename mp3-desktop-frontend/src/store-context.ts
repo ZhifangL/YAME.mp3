@@ -138,6 +138,21 @@ export interface Store {
 
   /** Show the About box: version, where presets live, and the licence. */
   showAbout: () => void
+
+  /**
+   * Undo/redo for whatever text field has focus.
+   *
+   * Routed through the store so the Edit menu and the keyboard share one
+   * implementation, and so a screen with its own history (the track editor) can
+   * take over from the browser's per-field undo.
+   */
+  undo: () => void
+  redo: () => void
+  /**
+   * Let a screen supply its own undo/redo, returning true when it handled the
+   * action. Pass null on unmount. The text fields' own history is the default.
+   */
+  registerHistory: (handler: (() => boolean) | null) => void
 }
 
 export const StoreContext = createContext<Store | null>(null)
