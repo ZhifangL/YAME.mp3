@@ -92,15 +92,17 @@ jobs:
       # test the Rust half.
       - name: Stub the sidecar
         run: node scripts/placeholder-sidecar.mjs
-      # NOTE (Windows): a debug build of the Tauri dependency tree takes longer
-      # than the release build the packaging job does — observed to exceed the
-      # job timeout on a cold cache, while `package-windows` (release, warm
-      # cache) finished in ~10 minutes. It compiles; it is just slow. If this
-      # job keeps timing out, the fix is to carry the cache between jobs rather
-      # than to raise the timeout again.
+      # NOTE: the *compile* is not the risk here — once rust-cache is warm it is
+      # a couple of minutes, even on Windows (a cold debug build is much slower,
+      # but it finishes). A *hanging test* is the risk: one blocked for 40
+      # minutes holding the runner, and reported nothing about which test did
+      # it. Hence the bound below, which fails in minutes and leaves the
+      # culprit's name in the log.
       - name: Build and test the shell
-        working-directory: mp3-desktop-frontend/src-tauri
-        run: cargo test --verbose
+        env:
+          CARGO_TEST_CWD: mp3-desktop-frontend/src-tauri
+        # 10 minutes covers a cold compile plus the suite.
+        run: node mp3-desktop-frontend/scripts/cargo-test-timeout.mjs 600
 
   package-windows:
     name: Package (Windows NSIS installer)

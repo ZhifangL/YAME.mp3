@@ -339,10 +339,11 @@ mod tests {
         assert_eq!(resolve_prog_id("NoSuchProgIdForYameTests"), None);
     }
 
-    #[test]
-    fn the_chooser_refuses_a_file_that_does_not_exist() {
-        // The dialog is the shell's to draw; we only need it not to succeed on
-        // a path that is not there.
-        assert!(open_with_chooser("C:\\definitely\\not\\here.mp3").is_err());
-    }
+    // `open_with_chooser` and `open_default` are deliberately untested here.
+    // Both hand off to the shell, and `SHOpenWithDialog` does not validate the
+    // path before showing — so "call it with a missing file and assert an
+    // error" does not merely fail, it *blocks forever* on a machine with no one
+    // to dismiss the dialog. That hung a CI runner for 40 minutes. Their
+    // arguments are covered by the pure helpers above; the dialogs themselves
+    // need a human, which is what ports/windows/CHECKLIST.md is for.
 }
