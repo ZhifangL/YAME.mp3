@@ -100,9 +100,10 @@ jobs:
       # culprit's name in the log.
       - name: Build and test the shell
         env:
-          CARGO_TEST_CWD: mp3-desktop-frontend/src-tauri
+          # Relative to this job's working-directory, which is the frontend root.
+          CARGO_TEST_CWD: src-tauri
         # 10 minutes covers a cold compile plus the suite.
-        run: node mp3-desktop-frontend/scripts/cargo-test-timeout.mjs 600
+        run: node scripts/cargo-test-timeout.mjs 600
 
   package-windows:
     name: Package (Windows NSIS installer)
