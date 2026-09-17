@@ -14,13 +14,11 @@
 //!
 //! Selection is reported through a single event (`yame://menu`) carrying the
 //! item id, which the frontend turns back into an action.
-use tauri::menu::{
-    AboutMetadata, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder,
-};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 
 #[cfg(target_os = "macos")]
-use tauri::menu::IconMenuItemBuilder;
+use tauri::menu::{AboutMetadata, IconMenuItemBuilder};
 
 use crate::apps;
 
@@ -150,15 +148,15 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::me
     #[cfg(not(target_os = "macos"))]
     let menu = {
         let help_menu = SubmenuBuilder::new(app, "Help")
-            .item(&PredefinedMenuItem::about(
-                app,
-                None,
-                Some(AboutMetadata {
-                    name: Some("YAME.mp3".into()),
-                    version: Some(env!("CARGO_PKG_VERSION").into()),
-                    ..AboutMetadata::default()
-                }),
-            )?)
+            // An explicit item rather than `PredefinedMenuItem::about`: the
+            // predefined one opens the OS's own dialog, which on Windows shows
+            // a bare message box with no version and no config path. Routing it
+            // through the app's dialog keeps the same information visible on
+            // every platform.
+            .item(
+                &MenuItemBuilder::with_id("help.about", "About YAME.mp3")
+                    .build(app)?,
+            )
             .build()?;
         MenuBuilder::new(app)
             .items(&[&file_menu, &edit_menu, &view_menu, &help_menu])

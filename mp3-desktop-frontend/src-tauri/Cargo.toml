@@ -39,6 +39,12 @@ windows-sys = { version = "0.61", features = [
     "Win32_Security",
     "Win32_System_Threading",
     "Win32_System_Registry",
+    # CF_HDROP file copy/paste: the clipboard, its global memory, and
+    # DragQueryFileW for reading a drop list back.
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    # CF_HDROP is declared with the clipboard formats in Ole.
+    "Win32_System_Ole",
     "Win32_UI_Shell",
     # ShellExecuteW's show-state constant.
     "Win32_UI_WindowsAndMessaging",

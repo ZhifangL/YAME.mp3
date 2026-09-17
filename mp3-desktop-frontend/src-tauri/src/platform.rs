@@ -167,10 +167,7 @@ function run(argv) {
 
     #[cfg(target_os = "windows")]
     {
-        // TODO(windows): CF_HDROP on the clipboard, e.g. via clipboard-win's
-        // Clipboard::new().set_file_list.
-        let _ = existing;
-        Err("Copying files to the clipboard is not implemented on Windows yet".into())
+        return crate::windows::set_clipboard_files(&existing);
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -213,8 +210,7 @@ function run() {
 
     #[cfg(target_os = "windows")]
     {
-        // TODO(windows): read CF_HDROP back off the clipboard.
-        Err("Pasting files is not implemented on Windows yet".into())
+        return crate::windows::clipboard_files();
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

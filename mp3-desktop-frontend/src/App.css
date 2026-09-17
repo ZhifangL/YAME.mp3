@@ -1721,3 +1721,55 @@ table.tracks {
 }
 
 .save-btn.danger-btn:hover:not(:disabled) { background: var(--danger); filter: brightness(0.92); }
+
+/* ------------------------------------------------------ window controls */
+
+/* Windows caption buttons. 46x32 is the Windows 11 size, and the bar is taller
+   than the macOS one because a Windows title bar is: the user asked for the
+   Edge/VS Code proportions rather than the macOS 52px strip. */
+.host-windows .titlebar,
+.host-linux .titlebar {
+  height: 40px;
+  gap: 8px;
+  padding-right: 0;
+}
+
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  margin-left: 8px;
+  flex: none;
+}
+
+.wc-btn {
+  width: 46px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  padding: 0;
+}
+
+.wc-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-main);
+}
+
+.wc-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Close is red on hover, as it is on every Windows app. */
+.wc-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.wc-close:active {
+  background: #b1271b;
+  color: #fff;
+}

@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { savePlaylistFile } from '../desktop'
-import { isTauri } from '../env'
+import { hostPlatform, isTauri } from '../env'
 import { pickMusic } from '../pickers-helpers'
 import { useStore } from '../store-context'
+import { WindowControls } from './WindowControls'
+import { useWindowDrag } from '../useWindowChrome'
 
 function SearchIcon() {
   return (
@@ -13,38 +15,25 @@ function SearchIcon() {
   )
 }
 
-/** Let the header be dragged to move the window, the way a Mac title bar is. */
-function useWindowDrag() {
-  const ref = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    const bar = ref.current
-    if (!bar) return
-    // Only the bar itself is a drag handle; buttons and the search field keep
-    // their own clicks.
-    const onMouseDown = async (e: MouseEvent) => {
-      if (e.button !== 0 || e.detail > 1) return
-      if ((e.target as HTMLElement).closest('button, input, a, .no-drag')) return
-      const tauri = (window as unknown as {
-        __TAURI__?: { window?: { getCurrentWindow(): { startDragging(): Promise<void> } } }
-      }).__TAURI__
-      try {
-        await tauri?.window?.getCurrentWindow().startDragging()
-      } catch {
-        /* not running under Tauri, or the permission is missing */
-      }
-    }
-    bar.addEventListener('mousedown', onMouseDown)
-    return () => bar.removeEventListener('mousedown', onMouseDown)
-  }, [])
-
-  return ref
-}
-
 export function TitleBar() {
-  const { search, setSearch, tracks, selectedPaths, showToast, importPaths } = useStore()
+  const { search, setSearch, tracks, selectedPaths, showToast, importPaths, showAbout } = useStore()
   const searchInput = useRef<HTMLInputElement>(null)
   const barRef = useWindowDrag()
+
+  // Windows and Linux draw their own title bar, so they get our own caption
+  // buttons. macOS keeps its traffic lights, which live inside this same bar.
+  const drawsOwnChrome = isTauri() && hostPlatform() !== 'macos'
+
+  // Ctrl+F / Cmd+F reaches the menu bar's Search item, which the menu handler
+  // routes here. Focus directly so the caret lands in the field.
+  useEffect(() => {
+    const focus = () => {
+      searchInput.current?.focus()
+      searchInput.current?.select()
+    }
+    window.addEventListener('yame://focus-search', focus)
+    return () => window.removeEventListener('yame://focus-search', focus)
+  }, [])
 
   const createPlaylist = async () => {
     const chosen = tracks.filter((t) => selectedPaths.includes(t.file.path))
@@ -62,7 +51,7 @@ export function TitleBar() {
     }
     const contents = lines.join('\n')
     const folderName =
-      (chosen[0].file.path.split('/').slice(0, -1).pop() || 'YAME').replace(/[^\w\- ]+/g, '').trim() || 'YAME'
+      (chosen[0].file.path.split(/[/\\]/).slice(0, -1).pop() || 'YAME').replace(/[^\w\- ]+/g, '').trim() || 'YAME'
     const defaultName = folderName + ' playlist.m3u'
 
     // The packaged app gets a real save sheet, so the user picks the folder
@@ -115,6 +104,9 @@ export function TitleBar() {
         >
           Create playlist
         </button>
+        <button onClick={showAbout} title="About YAME.mp3">
+          Help
+        </button>
       </nav>
 
       <div className="search-box no-drag" onClick={() => searchInput.current?.focus()}>
@@ -129,6 +121,8 @@ export function TitleBar() {
           spellCheck={false}
         />
       </div>
+
+      {drawsOwnChrome && <WindowControls />}
     </header>
   )
 }

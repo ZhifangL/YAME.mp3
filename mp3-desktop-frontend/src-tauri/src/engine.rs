@@ -91,10 +91,58 @@ fn published_port() -> Option<u16> {
         .ok()
 }
 
+/// Where the engine and its supervisor write diagnostics.
+///
+/// A packaged GUI app has no console, so anything the sidecar prints used to be
+/// thrown away — which is why a user's "Cannot reach the YAME engine" arrived
+/// with no explanation attached. The engine writes application-level lines to
+/// `<config>/engine.log`; this appends the sidecar's raw stdout/stderr to the
+/// same file, so one file tells the whole story of a failed launch.
+fn diagnostic_log_path() -> Option<PathBuf> {
+    let config_dir = std::env::var("YAME_CONFIG_DIR")
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| home_dir().map(|home| home.join(".config").join("yame")))?;
+    std::fs::create_dir_all(&config_dir).ok()?;
+    Some(config_dir.join("engine.log"))
+}
+
+/// Append a supervisor line to the diagnostic log, ignoring any failure.
+///
+/// Used for the moments that leave no other trace: a launch attempt, the
+/// resolved sidecar path, a spawn error. Without them a log that ends after the
+/// engine's own startup says nothing about who was at fault.
+fn note(message: &str) {
+    use std::io::Write;
+
+    let Some(path) = diagnostic_log_path() else { return };
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "[yame] {message}");
+    }
+}
+
+/// Copy a stream to stdout *and* the diagnostic log.
+///
+/// Both, not either: stdout is what a developer sees in `tauri dev`, and the
+/// file is what survives on a machine we cannot inspect.
 fn forward_output<R: std::io::Read + Send + 'static>(stream: R, label: &'static str) {
     std::thread::spawn(move || {
+        use std::io::Write;
+
+        let mut log = diagnostic_log_path().and_then(|path| {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .ok()
+        });
+
         for line in BufReader::new(stream).lines().map_while(Result::ok) {
             println!("[{label}] {line}");
+            if let Some(file) = log.as_mut() {
+                // Best effort: a full disk must not take the engine down.
+                let _ = writeln!(file, "[{label}] {line}");
+            }
         }
     });
 }
@@ -104,10 +152,19 @@ pub fn start() -> Engine {
     let port = free_port();
     let origin = format!("http://127.0.0.1:{port}");
 
+    // One line marking a launch attempt, so a log with nothing after it means
+    // the sidecar never ran at all — which is a different bug from a sidecar
+    // that ran and failed.
+    note(&format!(
+        "launching engine on port {port} (app pid {})",
+        std::process::id()
+    ));
+
     let Some(binary) = sidecar_path() else {
         // No bundled engine (a plain `tauri dev` before the sidecar is built):
         // use whatever the developer already has running.
         let port = published_port().unwrap_or(8000);
+        note("no sidecar binary found; expecting an engine already running");
         println!("[yame] no sidecar binary found; expecting an engine on port {port}");
         return Engine {
             origin: format!("http://127.0.0.1:{port}"),
@@ -116,6 +173,8 @@ pub fn start() -> Engine {
             owned: false,
         };
     };
+
+    note(&format!("sidecar binary: {}", binary.display()));
 
     let mut command = Command::new(&binary);
     command
@@ -149,6 +208,7 @@ pub fn start() -> Engine {
                 forward_output(err, "engine");
             }
             println!("[yame] engine started on {origin}");
+            note(&format!("spawned sidecar (pid {})", child.id()));
             Engine {
                 origin,
                 child: Mutex::new(Some(child)),
@@ -157,6 +217,9 @@ pub fn start() -> Engine {
             }
         }
         Err(err) => {
+            // The most valuable line in the file: the sidecar exists but the OS
+            // refused to run it (missing, not executable, blocked by policy).
+            note(&format!("could not start the engine: {err}"));
             eprintln!("[yame] could not start the engine ({err}); falling back to port 8000");
             Engine {
                 origin: "http://127.0.0.1:8000".to_string(),

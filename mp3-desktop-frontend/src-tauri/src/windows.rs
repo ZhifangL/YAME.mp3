@@ -301,6 +301,142 @@ fn subkey_names(hive: HKEY, subkey: &str) -> Vec<String> {
     names
 }
 
+/// Put file references on the clipboard as `CF_HDROP`, so Explorer pastes copies.
+///
+/// Built by hand rather than by pulling in a clipboard crate: the structure is
+/// small and fixed (a `DROPFILES` header followed by a double-NUL-terminated
+/// list of UTF-16 paths), and every API needed is one we already link against.
+///
+/// The memory is allocated with `GMEM_MOVEABLE` and handed to the clipboard,
+/// which takes ownership on success — freeing it afterwards would corrupt the
+/// clipboard, so the failure path is the only one that cleans up.
+pub fn set_clipboard_files(paths: &[String]) -> Result<usize, String> {
+    use std::mem::size_of;
+
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::System::DataExchange::{
+        CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+    };
+    use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+    use windows_sys::Win32::System::Ole::CF_HDROP;
+    use windows_sys::Win32::UI::Shell::DROPFILES;
+
+    if paths.is_empty() {
+        return Err("No files to copy".into());
+    }
+
+    // Header, then every path as UTF-16, then one extra NUL to end the list.
+    let mut utf16: Vec<u16> = Vec::new();
+    for path in paths {
+        utf16.extend(path.encode_utf16());
+        utf16.push(0);
+    }
+    utf16.push(0);
+
+    let header = size_of::<DROPFILES>();
+    let bytes = header + utf16.len() * size_of::<u16>();
+
+    unsafe {
+        if OpenClipboard(std::ptr::null_mut()) == 0 {
+            return Err("Could not open the Windows clipboard.".into());
+        }
+        // From here on every exit must close the clipboard.
+        let result = (|| -> Result<usize, String> {
+            let handle = GlobalAlloc(GMEM_MOVEABLE, bytes);
+            if handle.is_null() {
+                return Err("Could not allocate clipboard memory.".into());
+            }
+            let base = GlobalLock(handle) as *mut u8;
+            if base.is_null() {
+                windows_sys::Win32::Foundation::GlobalFree(handle);
+                return Err("Could not lock clipboard memory.".into());
+            }
+
+            let dropfiles = DROPFILES {
+                // Offset of the file list from the start of the structure.
+                pFiles: header as u32,
+                pt: POINT { x: 0, y: 0 },
+                fNC: 0,
+                // The paths are UTF-16, which is what Explorer expects.
+                fWide: 1,
+            };
+            std::ptr::copy_nonoverlapping(
+                &dropfiles as *const DROPFILES as *const u8,
+                base,
+                header,
+            );
+            std::ptr::copy_nonoverlapping(
+                utf16.as_ptr() as *const u8,
+                base.add(header),
+                utf16.len() * size_of::<u16>(),
+            );
+            GlobalUnlock(handle);
+
+            if EmptyClipboard() == 0 {
+                windows_sys::Win32::Foundation::GlobalFree(handle);
+                return Err("Could not empty the Windows clipboard.".into());
+            }
+            if SetClipboardData(CF_HDROP as u32, handle).is_null() {
+                // Ownership was not transferred, so this is ours to release.
+                windows_sys::Win32::Foundation::GlobalFree(handle);
+                return Err("Could not put the files on the Windows clipboard.".into());
+            }
+            // Success: the clipboard owns the memory now. Do not free it.
+            Ok(paths.len())
+        })();
+        CloseClipboard();
+        result
+    }
+}
+
+/// Read file references off the clipboard, as Explorer's Copy puts them.
+///
+/// Returns an empty list when the clipboard holds no files at all. Anything
+/// else on the clipboard (text, an image) is simply not a file list, and the
+/// caller reports that as "no audio files on the clipboard" rather than an
+/// error — that is what a user pressing Ctrl+V on a screenshot should see.
+pub fn clipboard_files() -> Result<Vec<String>, String> {
+    use windows_sys::Win32::System::DataExchange::{
+        CloseClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
+    };
+    use windows_sys::Win32::System::Ole::CF_HDROP;
+    use windows_sys::Win32::UI::Shell::DragQueryFileW;
+
+    if unsafe { IsClipboardFormatAvailable(CF_HDROP as u32) } == 0 {
+        return Ok(Vec::new());
+    }
+    if unsafe { OpenClipboard(std::ptr::null_mut()) } == 0 {
+        return Err("Could not open the Windows clipboard.".into());
+    }
+
+    let files = unsafe {
+        let handle = GetClipboardData(CF_HDROP as u32);
+        if handle.is_null() {
+            Vec::new()
+        } else {
+            // 0xFFFFFFFF asks for the count rather than a name.
+            let count = DragQueryFileW(handle, 0xFFFF_FFFF, std::ptr::null_mut(), 0);
+            let mut out = Vec::with_capacity(count as usize);
+            for index in 0..count {
+                // First call for the length (excluding the terminator), then
+                // for the characters themselves.
+                let length = DragQueryFileW(handle, index, std::ptr::null_mut(), 0);
+                if length == 0 {
+                    continue;
+                }
+                let mut buffer = vec![0u16; length as usize + 1];
+                let written = DragQueryFileW(handle, index, buffer.as_mut_ptr(), length + 1);
+                if written > 0 {
+                    out.push(String::from_utf16_lossy(&buffer[..written as usize]));
+                }
+            }
+            out
+        }
+    };
+    unsafe { CloseClipboard() };
+    Ok(files)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

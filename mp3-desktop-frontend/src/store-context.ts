@@ -135,6 +135,9 @@ export interface Store {
    * dismiss it in any way, so callers can guard with a plain `if (!ok) return`.
    */
   confirm: (request: Omit<ConfirmRequest, 'resolve'>) => Promise<boolean>
+
+  /** Show the About box: version, where presets live, and the licence. */
+  showAbout: () => void
 }
 
 export const StoreContext = createContext<Store | null>(null)

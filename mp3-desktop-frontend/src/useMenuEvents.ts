@@ -38,16 +38,17 @@ export function useMenuEvents(
     importPaths,
     removeTrack,
     showToast,
+    showAbout,
   } = useStore()
 
   // The listener is registered once, so it reads state through a ref that is
   // refreshed after every render rather than closing over stale values.
   const latest = useRef({
-    tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, onColumnMenu, focusSearch, menuTarget,
+    tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, showAbout, onColumnMenu, focusSearch, menuTarget,
   })
   useEffect(() => {
     latest.current = {
-      tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, onColumnMenu, focusSearch, menuTarget,
+      tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, showAbout, onColumnMenu, focusSearch, menuTarget,
     }
   })
 
@@ -72,7 +73,14 @@ export function useMenuEvents(
             await pickMusic('append', s.importPaths)
             return
           case id === 'view.search':
+            // The title bar owns the search field, so ask it to focus rather
+            // than reaching into its DOM from here. `focusSearch` is the
+            // in-table fallback for when the menu is not the source.
+            window.dispatchEvent(new Event('yame://focus-search'))
             s.focusSearch()
+            return
+          case id === 'help.about':
+            s.showAbout()
             return
           case id === 'open':
             if (!target) return

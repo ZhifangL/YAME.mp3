@@ -20,6 +20,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // first fetch or two are expected to fail. Retry before calling it an error.
   const [engineStarting, setEngineStarting] = useState(true)
   const [configDir, setConfigDir] = useState<string | null>(null)
+  /** The engine's API version, which is the app's version. */
+  const [version, setVersion] = useState<string | null>(null)
 
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [search, setSearch] = useState('')
@@ -69,6 +71,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  /**
+   * The About box, raised by Help in the title bar and by Help ▸ About.
+   *
+   * Shown through the confirm dialog rather than a bespoke modal: it is a few
+   * lines of text with one button, and a second dialog component for that would
+   * be one more thing to keep styled consistently on every platform.
+   */
+  const showAbout = useCallback(() => {
+    const message = [
+      'A rule-based batch metadata editor for local music.',
+      `Version ${version ?? 'unknown'}`,
+      configDir ? `Presets live in ${configDir}` : null,
+      'GNU GPL v3.0 or later. Everything runs on this machine; nothing is uploaded.',
+    ]
+      .filter(Boolean)
+      .join('\n')
+    void confirm({ title: 'YAME.mp3', message, confirmLabel: 'Close' })
+  }, [confirm, version, configDir])
+
   const init = useCallback(async () => {
     // The engine (a bundled sidecar in the packaged app) may still be starting.
     const deadline = Date.now() + 30000
@@ -95,9 +116,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
     api
       .health()
-      .then((res) => setConfigDir(res.config_dir))
+      .then((res) => {
+        setConfigDir(res.config_dir)
+        setVersion(res.version)
+      })
       .catch(() => {
-        /* the config path is only used for display */
+        /* the config path and version are only used for display */
       })
   }, [])
 
@@ -675,6 +699,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       importPresets,
       showToast,
       confirm,
+      showAbout,
     }),
     [
       registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError, engineStarting, configDir,
@@ -686,7 +711,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeRule, toggleRule, reorderRules, openEdit,
       closeEdit, writeFields, setCover, setCoverFromFile, removeCover,
       startApply, confirmApply, cancelApply, savePreset, loadPreset,
-      deletePreset, importPresets, showToast, confirm,
+      deletePreset, importPresets, showToast, confirm, showAbout,
     ],
   )
 

@@ -63,6 +63,27 @@ pub fn run() {
                     .hidden_title(true);
             }
 
+            // Windows draws its own title bar, so the window itself must be
+            // frameless — otherwise the app's header sits under a native one.
+            // The user asked for the Edge/VS Code arrangement: our bar carries
+            // the app icon, the actions, the search box and the caption
+            // buttons. Resizing still works, because a Win32 window keeps its
+            // resize border without decorations.
+            //
+            // WebView2 also draws its own context menu for right-clicks (Back,
+            // Refresh, Print, Save as…), which no amount of `preventDefault` in
+            // the page can suppress — it is native, not DOM. This switch turns
+            // it off so the app's own context menus are the only ones that
+            // appear.
+            #[cfg(target_os = "windows")]
+            {
+                builder = builder
+                    .decorations(false)
+                    .additional_browser_args(
+                        "--disable-features=msWebView2BrowserContextMenu,msWebView2BrowserAcceleratorKeys",
+                    );
+            }
+
             // A real menu bar on every platform: File > Open Files… / Add
             // Files…, the standard Edit and Window menus, and Help. Only the
             // contents differ per platform (see `menu::build_app_menu`).
