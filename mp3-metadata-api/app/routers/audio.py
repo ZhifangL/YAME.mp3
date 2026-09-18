@@ -51,7 +51,7 @@ from app.services.presets import (
     normalise_ruleset,
     save_preset,
 )
-from app.services.rules import REGISTRY, RuleContext, registry_specs
+from app.services.rules import REGISTRY, RuleContext, join_native, registry_specs
 
 router = APIRouter(tags=["audio"])
 
@@ -206,7 +206,9 @@ def _run_preview(filename: str, folder: str, fields: dict, cover, rule):
         fields=ctx_fields,
         filename=filename,
         parent_dir=folder,
-        path=(folder.rstrip("/") + "/" + filename) if folder else filename,
+        # Joined with the separator the folder itself uses: this path is handed
+        # to rules, so on Windows it must stay a Windows path.
+        path=join_native(folder, filename),
     )
     changes = cls().apply(ctx, rule.params or {})
     out_fields = {**fields, **{c["field"]: c["after"] for c in changes if not c["field"].startswith("__")}}

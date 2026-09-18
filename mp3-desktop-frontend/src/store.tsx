@@ -1,6 +1,7 @@
 // Central app state: tracks, selection, ruleset, presets, overlays, toasts.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from './api'
+import { appVersion as shellVersion } from './env'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { defaultParams } from './rules'
 import { StoreContext, type BuilderDraft, type ConfirmRequest, type SortKey, type Store, type ToastState } from './store-context'
@@ -22,6 +23,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [configDir, setConfigDir] = useState<string | null>(null)
   /** The engine's API version, which is the app's version. */
   const [version, setVersion] = useState<string | null>(null)
+  /** The shell's build version — correct even when the engine never answers. */
+  const [appVersion, setAppVersion] = useState<string | null>(null)
 
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [search, setSearch] = useState('')
@@ -79,16 +82,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    * be one more thing to keep styled consistently on every platform.
    */
   const showAbout = useCallback(() => {
+    // The version falls back to the shell's build version. The engine reports
+    // its own, but the About box is exactly what a user opens when the engine
+    // is *not* answering — so at that moment it must not say "unknown".
+    const shown = version ?? appVersion ?? 'unknown'
     const message = [
       'A rule-based batch metadata editor for local music.',
-      `Version ${version ?? 'unknown'}`,
+      `Version ${shown}`,
       configDir ? `Presets live in ${configDir}` : null,
       'GNU GPL v3.0 or later. Everything runs on this machine; nothing is uploaded.',
     ]
       .filter(Boolean)
       .join('\n')
-    void confirm({ title: 'YAME.mp3', message, confirmLabel: 'Close' })
-  }, [confirm, version, configDir])
+    // `cancelLabel: null` — an information box has one button, not two.
+    void confirm({ title: 'YAME.mp3', message, confirmLabel: 'Close', cancelLabel: null })
+  }, [confirm, version, appVersion, configDir])
 
   /**
    * Undo/redo.
@@ -142,6 +150,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         /* presets are optional at startup */
       })
+    // Asked of the shell rather than the engine: this is the About box's
+    // fallback when the engine is unreachable.
+    setAppVersion(shellVersion())
+
     api
       .health()
       .then((res) => {

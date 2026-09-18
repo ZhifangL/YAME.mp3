@@ -1773,3 +1773,31 @@ table.tracks {
   background: #b1271b;
   color: #fff;
 }
+
+/* Windows title bar and search field.
+   The bar is our own DOM on Windows (the window is frameless), so it can read
+   as a Windows title bar rather than as a white app header: a grey strip with a
+   distinctly lighter search field, which is how Explorer, Edge and VS Code
+   separate those two surfaces. macOS keeps the white header, where a grey strip
+   under the traffic lights would look wrong. */
+.host-windows .titlebar,
+.host-linux .titlebar {
+  background: #f3f3f3;
+  border-bottom-color: #e0e0e0;
+}
+
+.host-windows .search-box,
+.host-linux .search-box {
+  background: #fbfbfb;
+  border-color: #d6d6d6;
+}
+
+.host-windows .search-box:hover,
+.host-linux .search-box:hover {
+  background: #ffffff;
+}
+
+.host-windows .nav-actions button:hover,
+.host-linux .nav-actions button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}

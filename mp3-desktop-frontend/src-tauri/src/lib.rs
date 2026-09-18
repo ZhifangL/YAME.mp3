@@ -41,9 +41,11 @@ pub fn run() {
             // user agent.
             let script = format!(
                 "window.__YAME_ENGINE__ = {{ origin: {:?} }};\n\
-                 window.__YAME_PLATFORM__ = {:?};",
+                 window.__YAME_PLATFORM__ = {:?};\n\
+                 window.__YAME_VERSION__ = {:?};",
                 engine.origin,
-                std::env::consts::OS
+                std::env::consts::OS,
+                app.package_info().version.to_string()
             );
 
             #[allow(unused_mut)]

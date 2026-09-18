@@ -92,9 +92,14 @@ export function ConfirmDialog({
           {state.message && <p className="confirm-message">{state.message}</p>}
         </div>
         <div className="confirm-actions">
-          <button ref={cancelButton} className="text-btn" onClick={() => answer(false)}>
-            {state.cancelLabel ?? 'Cancel'}
-          </button>
+          {/* An informational dialog ("About") has nothing to cancel, so two
+              buttons would be the same button twice. `cancelLabel: null` says
+              so explicitly. */}
+          {state.cancelLabel !== null && (
+            <button ref={cancelButton} className="text-btn" onClick={() => answer(false)}>
+              {state.cancelLabel ?? 'Cancel'}
+            </button>
+          )}
           <button
             ref={confirmButton}
             className={state.danger ? 'save-btn danger-btn' : 'save-btn'}

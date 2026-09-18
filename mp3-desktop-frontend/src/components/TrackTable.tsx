@@ -256,6 +256,19 @@ export function TrackTable() {
         return
       }
 
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        // Remove the selected songs from the list. Scoped like every other
+        // shortcut here: inside a text field Backspace is an edit, and inside
+        // the search box it is how you correct a typo.
+        const chosen = selectionRef.current
+        if (!chosen.length) return
+        e.preventDefault()
+        const count = chosen.length
+        for (const path of chosen) removeTrack(path)
+        showToast('Removed ' + count + ' song' + (count === 1 ? '' : 's') + ' from the list', 'info')
+        return
+      }
+
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         const list = visibleRef.current
         if (!list.length) return
@@ -277,7 +290,7 @@ export function TrackTable() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [clearSelection, selectRange, folderPath, importPaths, showToast])
+  }, [clearSelection, selectRange, folderPath, importPaths, showToast, removeTrack])
 
   const frozenSet = new Set(colState.frozen)
   const hiddenSet = new Set(colState.hidden)

@@ -34,12 +34,95 @@ fn free_port() -> u16 {
         .unwrap_or(8000)
 }
 
+/// The engine, embedded in this executable at build time.
+///
+/// This is what makes the portable build a single file: rather than shipping
+/// `YAME.exe` *and* `yame-engine.exe` — which invites the two to be separated,
+/// renamed by a browser's duplicate-name suffix, or just look like clutter —
+/// the engine travels inside the app and is unpacked on first run.
+///
+/// The `cfg` is set by `build.rs` only when a real (non-empty) sidecar was
+/// present, so a compile-only checkout embeds nothing instead of a stub.
+#[cfg(embed_sidecar)]
+static EMBEDDED_ENGINE: &[u8] = include_bytes!(env!("YAME_SIDECAR_PATH"));
+
+/// Where an unpacked embedded engine lives.
+///
+/// Per-user application data, not the temp directory: a temp cleaner must not
+/// be able to delete the engine out from under a running app, and the path
+/// stays stable across launches so the file is written once rather than every
+/// time. Windows and macOS both give each user their own tree.
+#[cfg(embed_sidecar)]
+fn unpack_dir() -> Option<PathBuf> {
+    let base = if cfg!(target_os = "windows") {
+        std::env::var("LOCALAPPDATA").ok().map(PathBuf::from)
+    } else if cfg!(target_os = "macos") {
+        home_dir().map(|home| home.join("Library").join("Application Support"))
+    } else {
+        std::env::var("XDG_CACHE_HOME")
+            .ok()
+            .map(PathBuf::from)
+            .or_else(|| home_dir().map(|home| home.join(".cache")))
+    }?;
+    // The version is in the path so an upgrade cannot leave a stale engine
+    // behind that the new app then runs.
+    Some(base.join("YAME").join("engine").join(env!("CARGO_PKG_VERSION")))
+}
+
+/// Write the embedded engine to disk, reusing an existing copy when it matches.
+///
+/// Returns None when there is nothing embedded, so the caller falls back to the
+/// sidecar file (the installed layout) and then to a developer's own engine.
+#[cfg(embed_sidecar)]
+fn unpack_embedded_engine() -> Option<PathBuf> {
+    let dir = unpack_dir()?;
+    let name = if cfg!(target_os = "windows") { "yame-engine.exe" } else { "yame-engine" };
+    let target = dir.join(name);
+
+    // Size is enough to tell "already unpacked from this build" from "partial
+    // write" or "an older engine": the bytes are the same on every run.
+    if let Ok(meta) = std::fs::metadata(&target) {
+        if meta.len() == EMBEDDED_ENGINE.len() as u64 {
+            return Some(target);
+        }
+    }
+
+    std::fs::create_dir_all(&dir).ok()?;
+    // Write beside the target and rename, so a crash mid-write cannot leave a
+    // half-written engine that the next launch would happily execute.
+    let staging = dir.join(format!("{name}.new"));
+    std::fs::write(&staging, EMBEDDED_ENGINE).ok()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755));
+    }
+    std::fs::rename(&staging, &target).ok()?;
+    println!("[yame] unpacked the engine to {}", target.display());
+    Some(target)
+}
+
+#[cfg(not(embed_sidecar))]
+fn unpack_embedded_engine() -> Option<PathBuf> {
+    None
+}
+
 /// Locate the sidecar binary.
 ///
-/// In a bundled app Tauri places `externalBin` files next to the executable
-/// (inside `Contents/MacOS/` on macOS). During `tauri dev` they live in
-/// `src-tauri/binaries/` with the target-triple suffix Tauri requires.
+/// Three places, in order of preference:
+///
+/// 1. an engine unpacked from this executable (the portable single-file build);
+/// 2. `externalBin`, which Tauri places next to the executable — the installed
+///    layout, and where a developer's staged sidecar lives during `tauri dev`;
+/// 3. `src-tauri/binaries/` with the target-triple suffix.
+///
+/// Returning None means "no bundled engine": `start` then attaches to whatever
+/// a developer already has running.
 fn sidecar_path() -> Option<PathBuf> {
+    if let Some(unpacked) = unpack_embedded_engine() {
+        return Some(unpacked);
+    }
+
     let name = "yame-engine";
 
     if let Ok(exe) = std::env::current_exe() {

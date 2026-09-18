@@ -18,7 +18,23 @@ declare global {
     __TAURI_INTERNALS__?: unknown
     __YAME_ENGINE__?: EngineBridge
     __YAME_PLATFORM__?: string
+    __YAME_VERSION__?: string
   }
+}
+
+/**
+ * The app's version.
+ *
+ * The shell injects its build version, so this is available before — and even
+ * if — the engine answers. That matters for the About box, which is exactly
+ * what a user opens when something is wrong. In a plain browser the Vite define
+ * supplies the package version instead.
+ */
+export function appVersion(): string {
+  if (typeof window !== 'undefined' && window.__YAME_VERSION__) {
+    return window.__YAME_VERSION__
+  }
+  return __APP_VERSION__
 }
 
 /** True inside the Tauri webview (the same check the plugins use). */

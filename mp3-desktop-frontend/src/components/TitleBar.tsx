@@ -81,6 +81,13 @@ export function TitleBar() {
     )
   }
 
+  // Tooltips name the shortcut the way the platform writes it: Mac users read
+  // ⌘O, Windows users read Ctrl + O. A single "CmdOrCtrl" string would be wrong
+  // on both.
+  const isMac = hostPlatform() === 'macos'
+  const openTip = isMac ? 'Open files (⌘O)' : 'Open files (Ctrl + O)'
+  const addTip = isMac ? 'Add files (⇧⌘O)' : 'Add files (Ctrl + Shift + O)'
+
   return (
     <header className="titlebar" ref={barRef}>
       <div className="wordmark">
@@ -91,10 +98,10 @@ export function TitleBar() {
       <div className="nav-divider" />
 
       <nav className="nav-actions no-drag">
-        <button onClick={() => pickMusic('replace', importPaths)} title="Open music — replaces the current list">
+        <button onClick={() => pickMusic('replace', importPaths)} title={openTip}>
           Open
         </button>
-        <button onClick={() => pickMusic('append', importPaths)} title="Add music to the current list">
+        <button onClick={() => pickMusic('append', importPaths)} title={addTip}>
           Add
         </button>
         <button

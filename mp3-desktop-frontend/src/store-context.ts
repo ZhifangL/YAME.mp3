@@ -52,8 +52,11 @@ export interface ConfirmRequest {
   message?: string
   /** Defaults to "OK". */
   confirmLabel?: string
-  /** Defaults to "Cancel". */
-  cancelLabel?: string
+  /**
+   * Defaults to "Cancel". Set to null for an informational dialog with a single
+   * action, so it does not show the same button twice.
+   */
+  cancelLabel?: string | null
   /** Styles the confirm button as destructive. */
   danger?: boolean
   resolve: (value: boolean) => void

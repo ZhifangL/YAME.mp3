@@ -148,17 +148,17 @@ jobs:
         run: pnpm exec tauri build --bundles nsis
       - name: Assemble the portable build
         shell: pwsh
-        # No installer at all: the executable plus the engine sidecar, zipped.
-        # Tauri puts the sidecar beside the binary, so copying both is the whole
-        # application. This is what most users should download — there is
+        # One file, no installer. The engine is embedded in the executable and
+        # unpacked to %LOCALAPPDATA%\YAME\engine on first run, so there is
         # nothing to install, nothing in the registry, and uninstalling is
-        # deleting the folder.
+        # deleting one file. Shipping the sidecar *beside* the app is what the
+        # previous round did, and it invited the two to be separated, renamed by
+        # a browser's duplicate-name suffix, or simply look like clutter.
         run: |
           $release = "src-tauri/target/release"
-          $portable = "src-tauri/target/release/yame-portable"
+          $portable = "$release/yame-portable"
           New-Item -ItemType Directory -Force -Path $portable | Out-Null
           Copy-Item "$release/yame.exe" $portable
-          Copy-Item "$release/yame-engine.exe" $portable
           Copy-Item "README-portable.txt" $portable -ErrorAction SilentlyContinue
           Compress-Archive -Path "$portable/*" -DestinationPath "$release/YAME-portable-x64.zip" -Force
           Get-ChildItem $portable
