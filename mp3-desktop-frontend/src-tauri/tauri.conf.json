@@ -31,9 +31,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": [
-      "binaries/yame-engine"
-    ],
     "shortDescription": "Rule-based audio metadata batch editor",
     "longDescription": "YAME edits the metadata of a whole folder of audio files with visible, reusable rules: build a ruleset once, preview every change, apply it in a batch, and save it as a preset.",
     "copyright": "Free and open source",
