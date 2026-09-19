@@ -3,11 +3,15 @@
 //! The window is built here rather than declared in `tauri.conf.json` so the
 //! engine's origin can be injected as an initialization script — it has to be
 //! in place before any page code runs.
+mod apps;
 mod engine;
 #[cfg(target_os = "macos")]
 mod macos;
 mod menu;
 mod platform;
+mod process_group;
+#[cfg(target_os = "windows")]
+mod windows;
 
 use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 
@@ -18,7 +22,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             platform::pick_music,
             platform::open_default,
-            platform::apps_for_file,
             platform::open_with_app,
             platform::copy_files_to_clipboard,
             platform::read_files_from_clipboard,
@@ -32,9 +35,17 @@ pub fn run() {
             // Picked before the webview exists, so the UI knows where to look
             // from its very first request. It polls /api/health until the
             // engine is up, which lets the window appear immediately.
+            //
+            // The platform goes across in the same script so the frontend can
+            // style itself for the host it is on, rather than guessing from the
+            // user agent.
             let script = format!(
-                "window.__YAME_ENGINE__ = {{ origin: {:?} }};",
-                engine.origin
+                "window.__YAME_ENGINE__ = {{ origin: {:?} }};\n\
+                 window.__YAME_PLATFORM__ = {:?};\n\
+                 window.__YAME_VERSION__ = {:?};",
+                engine.origin,
+                std::env::consts::OS,
+                app.package_info().version.to_string()
             );
 
             #[allow(unused_mut)]
@@ -52,12 +63,34 @@ pub fn run() {
                 builder = builder
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
                     .hidden_title(true);
-
-                // A real menu bar: File > Open Files… / Add Files…, plus the
-                // standard Edit and Window menus macOS users expect.
-                let app_menu = menu::build_app_menu(app.handle())?;
-                app.set_menu(app_menu)?;
             }
+
+            // Windows draws its own title bar, so the window itself must be
+            // frameless — otherwise the app's header sits under a native one.
+            // The user asked for the Edge/VS Code arrangement: our bar carries
+            // the app icon, the actions, the search box and the caption
+            // buttons. Resizing still works, because a Win32 window keeps its
+            // resize border without decorations.
+            //
+            // WebView2 also draws its own context menu for right-clicks (Back,
+            // Refresh, Print, Save as…), which no amount of `preventDefault` in
+            // the page can suppress — it is native, not DOM. This switch turns
+            // it off so the app's own context menus are the only ones that
+            // appear.
+            #[cfg(target_os = "windows")]
+            {
+                builder = builder
+                    .decorations(false)
+                    .additional_browser_args(
+                        "--disable-features=msWebView2BrowserContextMenu,msWebView2BrowserAcceleratorKeys",
+                    );
+            }
+
+            // A real menu bar on every platform: File > Open Files… / Add
+            // Files…, the standard Edit and Window menus, and Help. Only the
+            // contents differ per platform (see `menu::build_app_menu`).
+            let app_menu = menu::build_app_menu(app.handle())?;
+            app.set_menu(app_menu)?;
 
             builder.build()?;
             app.manage(engine);

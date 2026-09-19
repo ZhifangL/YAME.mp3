@@ -11,7 +11,7 @@ import {
   openWithDefault,
   pasteFiles,
   pickApplication,
-  revealInFinder,
+  revealPath,
 } from './desktop'
 import { pickMusic } from './pickers-helpers'
 import { useStore } from './store-context'
@@ -38,16 +38,19 @@ export function useMenuEvents(
     importPaths,
     removeTrack,
     showToast,
+    showAbout,
+    undo,
+    redo,
   } = useStore()
 
   // The listener is registered once, so it reads state through a ref that is
   // refreshed after every render rather than closing over stale values.
   const latest = useRef({
-    tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, onColumnMenu, focusSearch, menuTarget,
+    tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, showAbout, undo, redo, onColumnMenu, focusSearch, menuTarget,
   })
   useEffect(() => {
     latest.current = {
-      tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, onColumnMenu, focusSearch, menuTarget,
+      tracks, selectedPaths, folderPath, importPaths, removeTrack, showToast, showAbout, undo, redo, onColumnMenu, focusSearch, menuTarget,
     }
   })
 
@@ -72,7 +75,20 @@ export function useMenuEvents(
             await pickMusic('append', s.importPaths)
             return
           case id === 'view.search':
+            // The title bar owns the search field, so ask it to focus rather
+            // than reaching into its DOM from here. `focusSearch` is the
+            // in-table fallback for when the menu is not the source.
+            window.dispatchEvent(new Event('yame://focus-search'))
             s.focusSearch()
+            return
+          case id === 'help.about':
+            s.showAbout()
+            return
+          case id === 'edit.undo':
+            s.undo()
+            return
+          case id === 'edit.redo':
+            s.redo()
             return
           case id === 'open':
             if (!target) return
@@ -107,7 +123,7 @@ export function useMenuEvents(
             if (target) s.removeTrack(target)
             return
           case id === 'reveal':
-            if (target) await revealInFinder(target)
+            if (target) await revealPath(target)
             return
           default:
             return

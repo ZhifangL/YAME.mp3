@@ -1,18 +1,22 @@
 {
   "name": "mp3-desktop-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "tsc -b && eslint . && vitest run",
     "preview": "vite preview",
-    "sidecar": "bash scripts/build-sidecar.sh",
+    "sidecar": "node scripts/build-sidecar.mjs",
+    "sidecar:placeholder": "node scripts/placeholder-sidecar.mjs",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
-    "desktop:build": "bash scripts/build-sidecar.sh && tauri build",
-    "package": "bash scripts/build-sidecar.sh && tauri build",
+    "desktop:build": "node scripts/build-sidecar.mjs && tauri build",
+    "package": "node scripts/build-sidecar.mjs && tauri build",
     "icon": "bash scripts/build-icon.sh"
   },
   "dependencies": {
@@ -22,6 +26,10 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.11.4",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
@@ -30,8 +38,10 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
+    "jsdom": "^30.0.1",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.70.0",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vitest": "^5.0.1"
   }
 }

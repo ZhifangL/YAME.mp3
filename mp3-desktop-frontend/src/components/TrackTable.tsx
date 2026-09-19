@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
-import { copyFiles, openWithDefault, pasteFiles, revealInFinder } from '../desktop'
+import { copyFiles, openWithApp, openWithDefault, pasteFiles, pickApplication, revealPath } from '../desktop'
+import { fileManagerName } from '../env'
 import { pickMusic } from '../pickers-helpers'
 import { invoke } from '../tauri'
 import { useMenuEvents } from '../useMenuEvents'
@@ -127,6 +128,7 @@ export function TrackTable() {
     clearSelection,
     openEdit,
     removeTrack,
+    removeTracks,
     folderPath,
     appendPaths,
     importPaths,
@@ -177,7 +179,7 @@ export function TrackTable() {
   // The Edit menu's Copy/Paste are real macOS menu items, so their Cmd+C /
   // Cmd+V accelerators are handled by AppKit before any keydown reaches us.
   // Implementing the DOM copy/paste events is therefore the correct place to
-  // hook: it also routes by focus, exactly like Finder — text fields keep
+  // hook: it also routes by focus, exactly like the file manager — text fields keep
   // their own copy/paste, the track list copies files.
   useEffect(() => {
     const inTextField = () => {
@@ -255,6 +257,19 @@ export function TrackTable() {
         return
       }
 
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        // Remove the selected songs from the list. Scoped like every other
+        // shortcut here: inside a text field Backspace is an edit, and inside
+        // the search box it is how you correct a typo.
+        const chosen = selectionRef.current
+        if (!chosen.length) return
+        e.preventDefault()
+        const count = chosen.length
+        removeTracks(chosen)
+        showToast('Removed ' + count + ' song' + (count === 1 ? '' : 's') + ' from the list', 'info')
+        return
+      }
+
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         const list = visibleRef.current
         if (!list.length) return
@@ -276,7 +291,7 @@ export function TrackTable() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [clearSelection, selectRange, folderPath, importPaths, showToast])
+  }, [clearSelection, selectRange, folderPath, importPaths, showToast, removeTracks])
 
   const frozenSet = new Set(colState.frozen)
   const hiddenSet = new Set(colState.hidden)
@@ -548,8 +563,14 @@ export function TrackTable() {
         case 'open':
           await openWithDefault(path)
           break
-        case 'open-with':
-          throw new Error('"Open with…" is available in the packaged YAME app')
+        case 'open-with': {
+          // Only reachable from the browser-dev DOM menu: the packaged app
+          // shows a real native "Open With" from Rust. Say what this build can
+          // actually do rather than implying the feature is missing.
+          const appPath = await pickApplication()
+          if (appPath) await openWithApp(path, appPath)
+          break
+        }
         case 'copy':
           await copyFiles(selectedPaths.includes(path) && selectedPaths.length > 1 ? selectedPaths : [path])
           showToast('Copied ' + (selectedPaths.length > 1 ? selectedPaths.length + ' files' : 'file') + ' to the clipboard', 'success')
@@ -564,7 +585,7 @@ export function TrackTable() {
           removeTrack(path)
           break
         case 'finder':
-          await revealInFinder(path)
+          await revealPath(path)
           break
       }
     } catch (err) {
@@ -831,7 +852,7 @@ export function TrackTable() {
           <button onClick={() => rowAction('paste')}>Paste</button>
           <div className="freeze-divider" />
           <button onClick={() => rowAction('remove')}>Remove from list</button>
-          <button onClick={() => rowAction('finder')}>Show in Finder</button>
+          <button onClick={() => rowAction('finder')}>{'Show in ' + fileManagerName()}</button>
         </div>
       )}
     </div>

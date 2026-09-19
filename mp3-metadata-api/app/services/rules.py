@@ -28,6 +28,42 @@ from typing import Any, ClassVar, Optional
 from app.fields import RULE_FIELD_KEYS, field_label
 
 
+# ------------------------------------------------------------------ path parts
+
+def basename(path: str) -> str:
+    """The last component of a path, whichever separator it uses.
+
+    `os.path.basename` follows the *host's* convention, which is wrong for a
+    path produced by the other platform — and this engine also runs tests
+    against paths written either way. Splitting on both keeps a Windows path
+    correct on macOS and vice versa.
+    """
+    if not path:
+        return ""
+    trimmed = path.rstrip("/\\")
+    if not trimmed:
+        # The path *is* a root ("/", "\\", "///"): report it as given rather
+        # than as nothing, because a root is a real directory.
+        return path
+    # A drive root ("C:\\") is already the last component; stripping further
+    # would turn it into the drive-relative "C:".
+    if trimmed.endswith(":"):
+        return trimmed
+    return re.split(r"[/\\]", trimmed)[-1]
+
+
+def join_native(directory: str, name: str) -> str:
+    """Join a directory and a file name using the directory's own separator.
+
+    Windows paths stay `\\` and POSIX paths stay `/`, so a path built here is
+    one the platform that supplied the directory will recognise.
+    """
+    if not directory:
+        return name
+    separator = "\\" if "\\" in directory else "/"
+    return directory.rstrip("/\\") + separator + name
+
+
 # ------------------------------------------------------------------ wildcards
 
 _REGEX_SPECIALS = set(r"\^$.|+()[]{}<>")
@@ -96,7 +132,9 @@ class RuleContext:
         if key == "ext":
             return "." + self.filename.rsplit(".", 1)[1] if "." in self.filename else ""
         if key == "folder_name":
-            return self.parent_dir.rstrip("/").rsplit("/", 1)[-1] if self.parent_dir else ""
+            # Separator-agnostic: on Windows `parent_dir` is `C:\Music\Album`,
+            # so splitting on "/" alone returned the whole path.
+            return basename(self.parent_dir)
         if key == "folder_path":
             return self.parent_dir
         return self.fields.get(key, "")

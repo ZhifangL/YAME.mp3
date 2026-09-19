@@ -1,6 +1,6 @@
 [package]
 name = "yame"
-version = "1.0.0"
+version = "1.1.0"
 description = "Rule-based audio metadata batch editor"
 authors = ["YAME"]
 edition = "2021"
@@ -26,6 +26,29 @@ serde_json = "1"
 # Needed to signal the whole engine process group on exit: a PyInstaller
 # one-file sidecar is a bootloader plus the real server it forks.
 libc = "0.2"
+
+# Job objects, for the same reason on Windows — and more besides: the OS kills
+# every process in the job when its handle closes, so the engine is cleaned up
+# even if YAME itself crashes. Shell is for `ShellExecuteW` and
+# `SHOpenWithDialog`; Registry is for the "Open With" application list.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_System_JobObjects",
+    # CreateJobObjectW takes SECURITY_ATTRIBUTES, and
+    # JOBOBJECT_EXTENDED_LIMIT_INFORMATION embeds IO_COUNTERS.
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_System_Registry",
+    # CF_HDROP file copy/paste: the clipboard, its global memory, and
+    # DragQueryFileW for reading a drop list back.
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    # CF_HDROP is declared with the clipboard formats in Ole.
+    "Win32_System_Ole",
+    "Win32_UI_Shell",
+    # ShellExecuteW's show-state constant.
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 # Native macOS integration the webview cannot reach: the mixed file/folder
 # open panel, LaunchServices' "Open With" application list, and app icons.

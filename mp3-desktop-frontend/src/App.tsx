@@ -11,6 +11,7 @@ import { Toast } from './components/Toast'
 import { TrackTable } from './components/TrackTable'
 import { PickerInputs } from './pickers'
 import { useStore } from './store-context'
+import { useKeyboardShortcuts } from './useKeyboardShortcuts'
 import { useNativeFileDrop } from './useNativeFileDrop'
 
 function App() {
@@ -22,6 +23,9 @@ function App() {
 
   // Real absolute paths for drag-and-drop in the packaged app.
   useNativeFileDrop()
+
+  // Ctrl+F / Ctrl+O and the suppression of the webview's own context menu.
+  useKeyboardShortcuts()
 
   return (
     <div className="app">

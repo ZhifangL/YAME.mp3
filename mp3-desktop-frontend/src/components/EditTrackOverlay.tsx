@@ -35,7 +35,7 @@ const ADVANCED_EDITABLE: { key: keyof DraftFields; label: string; field: string 
 ]
 
 export function EditTrackOverlay() {
-  const { tracks, editTrackPath, closeEdit, writeFields, setCover, removeCover, showToast } = useStore()
+  const { tracks, editTrackPath, closeEdit, writeFields, setCover, removeCover, showToast, confirm } = useStore()
   const track = tracks.find((t) => t.file.path === editTrackPath) ?? null
   const [draft, setDraft] = useState<DraftFields | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -124,6 +124,22 @@ export function EditTrackOverlay() {
       draft.bpm !== (track.fields.bpm ?? '')
     )
   }, [track, draft])
+
+  // Closing with unsaved edits asks first. Both the ✕ and the Cancel button
+  // route through here so the two can never disagree about the guard.
+  const requestClose = useCallback(async () => {
+    if (!dirty) {
+      closeEdit()
+      return
+    }
+    const ok = await confirm({
+      title: 'Discard unsaved changes?',
+      message: 'Your edits to this track will be lost.',
+      confirmLabel: 'Discard',
+      danger: true,
+    })
+    if (ok) closeEdit()
+  }, [dirty, closeEdit, confirm])
 
   const onPickCover = useCallback(async (file: File) => {
     if (!track) return
@@ -222,7 +238,7 @@ export function EditTrackOverlay() {
           onPointerUp={endGeometry}
         >
           <span className="title">Edit Track</span>
-          <button className="overlay-close" onClick={() => (dirty ? window.confirm('Discard unsaved changes?') && closeEdit() : closeEdit())} title="Close (Esc)">
+          <button className="overlay-close" onClick={() => void requestClose()} title="Close (Esc)">
             ✕
           </button>
         </div>
@@ -328,7 +344,7 @@ export function EditTrackOverlay() {
         </div>
 
         <div className="overlay-footer">
-          <button className="text-btn" onClick={() => (dirty ? window.confirm('Discard unsaved changes?') && closeEdit() : closeEdit())}>
+          <button className="text-btn" onClick={() => void requestClose()}>
             Cancel
           </button>
           <button className="save-btn" onClick={save} disabled={saving || !track.writable}>

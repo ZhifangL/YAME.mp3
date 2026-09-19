@@ -4,7 +4,10 @@
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
     "module": "esnext",
-    "types": ["vite/client"],
+    // `node` is here for the tests, which may read a project file to assert on
+    // something jsdom cannot (a stylesheet rule, for instance). The app itself
+    // never imports a Node builtin; Vite would fail the build if it did.
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom", "node"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
 

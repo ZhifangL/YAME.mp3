@@ -1,0 +1,177 @@
+name: CI
+
+# The port targets Windows first. Type checking the Rust half does work from
+# macOS (`cargo check --target x86_64-pc-windows-gnu`, with mingw-w64), but
+# *packaging* cannot: PyInstaller builds only for the interpreter it runs under,
+# and there is no MSVC linker here. So the Windows runner is the only place a
+# Windows build is produced and verified before it reaches a real machine.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: Engine (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mp3-metadata-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install the engine and its test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . 
+          pip install pytest httpx pyinstaller
+      - name: Run the engine test suite
+        run: python -m pytest -q
+
+  frontend:
+    name: Frontend (types, lint, unit tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mp3-desktop-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: mp3-desktop-frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm exec tsc -b
+      - name: Lint
+        run: pnpm run lint
+      - name: Unit tests
+        run: pnpm test
+      - name: Production build
+        run: pnpm run build
+
+  shell:
+    name: Rust shell (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # A cold Windows build of the Tauri dependency tree is slow (tens of
+    # minutes); it should never be unbounded. Without this a stuck runner holds
+    # the job — and the queue — open indefinitely, which has happened once.
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: mp3-desktop-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mp3-desktop-frontend/src-tauri
+      - name: Install Linux webview dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libgtk-3-dev
+      # tauri-build refuses to compile until the externalBin file exists, so a
+      # fresh checkout needs a stub. The real engine is not needed to build or
+      # test the Rust half.
+      - name: Stub the sidecar
+        run: node scripts/placeholder-sidecar.mjs
+      # NOTE: the *compile* is not the risk here — once rust-cache is warm it is
+      # a couple of minutes, even on Windows (a cold debug build is much slower,
+      # but it finishes). A *hanging test* is the risk: one blocked for 40
+      # minutes holding the runner, and reported nothing about which test did
+      # it. Hence the bound below, which fails in minutes and leaves the
+      # culprit's name in the log.
+      - name: Build and test the shell
+        env:
+          # Relative to this job's working-directory, which is the frontend root.
+          CARGO_TEST_CWD: src-tauri
+        # 10 minutes covers a cold compile plus the suite.
+        run: node scripts/cargo-test-timeout.mjs 600
+
+  package-windows:
+    name: Package (Windows NSIS installer)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: mp3-desktop-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: mp3-desktop-frontend/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: mp3-desktop-frontend/src-tauri
+      - name: Install the engine's build dependencies
+        working-directory: mp3-metadata-api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+      - run: pnpm install --frozen-lockfile
+      - name: Freeze the engine and stage it as a sidecar
+        run: node scripts/build-sidecar.mjs
+      - name: Show what the sidecar is named
+        run: Get-ChildItem src-tauri/binaries
+        shell: pwsh
+      - name: Build the app and the installer
+        # NSIS only: an MSI would need the WiX toolset, and the installer is
+        # already the less preferred of the two distributions (see the portable
+        # zip below).
+        run: pnpm exec tauri build --bundles nsis
+      - name: Assemble the portable build
+        shell: pwsh
+        # One file, no installer. The engine is embedded in the executable and
+        # unpacked to %LOCALAPPDATA%\YAME\engine on first run, so there is
+        # nothing to install, nothing in the registry, and uninstalling is
+        # deleting one file. Shipping the sidecar *beside* the app is what the
+        # previous round did, and it invited the two to be separated, renamed by
+        # a browser's duplicate-name suffix, or simply look like clutter.
+        run: |
+          $release = "src-tauri/target/release"
+          $portable = "$release/yame-portable"
+          New-Item -ItemType Directory -Force -Path $portable | Out-Null
+          Copy-Item "$release/yame.exe" $portable
+          Copy-Item "README-portable.txt" $portable -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$portable/*" -DestinationPath "$release/YAME-portable-x64.zip" -Force
+          Get-ChildItem $portable
+      - name: Upload the portable build
+        uses: actions/upload-artifact@v4
+        with:
+          name: yame-windows-portable
+          path: mp3-desktop-frontend/src-tauri/target/release/YAME-portable-x64.zip
+          if-no-files-found: error
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: yame-windows-installer
+          path: |
+            mp3-desktop-frontend/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: warn

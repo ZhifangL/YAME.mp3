@@ -7,8 +7,10 @@ from app.services.rules import (
     REGISTRY,
     ChangeCaseRule,
     RuleContext,
+    basename,
     count_captures,
     glob_to_regex,
+    join_native,
     registry_specs,
     run_ruleset,
 )
@@ -417,3 +419,54 @@ def test_registry_marks_the_file_name_as_unblankable():
     # COPY FROM reads from any field, including the read-only pseudo-fields.
     source = next(p for p in REGISTRY["COPY FROM"].params if p["name"] == "source")
     assert source["role"] == "source"
+
+
+# ------------------------------------------------------------------ path parts
+#
+# These are the Windows-port regressions: the engine used to split paths on "/"
+# only, so a Windows `parent_dir` produced the whole path as the folder name.
+
+
+class TestPathParts:
+    def test_folder_name_of_a_posix_path(self):
+        ctx = RuleContext(fields={}, filename="song.mp3", parent_dir="/Users/me/Music/Album", path="")
+        assert ctx.get("folder_name") == "Album"
+
+    def test_folder_name_of_a_windows_path(self):
+        ctx = RuleContext(fields={}, filename="song.mp3", parent_dir="C:\\Users\\me\\Music\\Album", path="")
+        assert ctx.get("folder_name") == "Album"
+
+    def test_folder_name_ignores_a_trailing_separator(self):
+        for path in ("/Users/me/Album/", "C:\\Users\\me\\Album\\"):
+            ctx = RuleContext(fields={}, filename="song.mp3", parent_dir=path, path="")
+            assert ctx.get("folder_name") == "Album", path
+
+    def test_folder_path_is_passed_through_unchanged(self):
+        windows = "C:\\Users\\me\\Music"
+        ctx = RuleContext(fields={}, filename="song.mp3", parent_dir=windows, path="")
+        assert ctx.get("folder_path") == windows
+
+    def test_a_drive_root_gives_the_drive_not_the_separator(self):
+        # `C:\` is the root of the C: drive, so its name is the drive. Returning
+        # "" or "\" would make a "use the folder name" rule produce nothing.
+        ctx = RuleContext(fields={}, filename="song.mp3", parent_dir="C:\\", path="")
+        assert ctx.get("folder_name") == "C:"
+
+    def test_a_posix_root_is_reported_as_the_root(self):
+        ctx = RuleContext(fields={}, filename="song.mp3", parent_dir="/", path="")
+        assert ctx.get("folder_name") == "/"
+
+
+class TestJoinNative:
+    def test_keeps_a_posix_path_posix(self):
+        assert join_native("/Users/me/Music", "song.mp3") == "/Users/me/Music/song.mp3"
+
+    def test_keeps_a_windows_path_windows(self):
+        assert join_native("C:\\Users\\me\\Music", "song.mp3") == "C:\\Users\\me\\Music\\song.mp3"
+
+    def test_does_not_double_a_separator(self):
+        assert join_native("/a/b/", "s.mp3") == "/a/b/s.mp3"
+        assert join_native("C:\\a\\b\\", "s.mp3") == "C:\\a\\b\\s.mp3"
+
+    def test_no_directory_yields_the_name(self):
+        assert join_native("", "song.mp3") == "song.mp3"
