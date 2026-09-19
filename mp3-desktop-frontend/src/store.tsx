@@ -8,12 +8,24 @@ import { StoreContext, type BuilderDraft, type ConfirmRequest, type SortKey, typ
 import type { ApplyResponse, Preset, RegistryResponse, RuleInstance, Ruleset, Track } from './types'
 import { dirOf, joinPath } from './utils'
 
+/** One undoable step: the list as it was, and the files the edit changed. */
+interface HistoryStep {
+  tracks: Track[]
+  touched: string[]
+}
+
 let toastCounter = 0
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [registry, setRegistry] = useState<RegistryResponse | null>(null)
   const [presets, setPresets] = useState<Preset[]>([])
   const [tracks, setTracks] = useState<Track[]>([])
+  // Mirrors `tracks`. An edit needs the list as it was *before* it ran, and by
+  // the time a write returns, state has already moved on.
+  const tracksRef = useRef<Track[]>([])
+  useEffect(() => {
+    tracksRef.current = tracks
+  }, [tracks])
   const [folderPath, setFolderPath] = useState<string | null>(null)
   const [loadingTracks, setLoadingTracks] = useState(false)
   const [engineError, setEngineError] = useState<string | null>(null)
@@ -98,28 +110,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   /**
    * Undo/redo.
    *
-   * Two histories, because the app has two kinds of edit and the shortcut
-   * should follow what the user is working on:
+   * Three rules, from how the user expects the shortcut to behave:
    *
-   * * a text field has focus — the search box, a rule parameter, the track
-   *   editor — so the *browser's* per-field history is the right one;
-   * * otherwise the track list is what they are looking at, so the app's own
-   *   history of list changes applies.
+   * 1. **Only edits are undoable.** Loading songs — opening a folder, adding
+   *    files, a drop — sets the *baseline*. Undo must never unload the library
+   *    or step back to a previous selection of it; the first load is the floor.
+   * 2. **One edit, one step.** Removing ten songs with Backspace, or applying a
+   *    ruleset to a whole batch, undoes in a single press.
+   * 3. **Focus decides** which history the keystroke belongs to: a text field
+   *    keeps its own, the track list owns everything else.
    *
-   * The split is not cosmetic: `document.execCommand('undo')` always targets
-   * whatever has focus, and the search box autofocuses — so before this, every
-   * Ctrl+Z was consumed as search undo and the track list could not be undone
-   * at all.
+   * Rule 3 is not cosmetic: `document.execCommand('undo')` targets whatever has
+   * focus, and the search box autofocuses — so without the split, every Ctrl+Z
+   * was consumed as search undo.
+   *
+   * Each step records the paths it touched, because undoing an *edit* has to
+   * re-read those files: the tags on disk changed, so restoring the old in-memory
+   * objects would show the user values that are no longer true.
    */
-  const history = useRef<{ past: Track[][]; future: Track[][] }>({ past: [], future: [] })
+  const history = useRef<{ past: HistoryStep[]; future: HistoryStep[] }>({ past: [], future: [] })
 
-  const rememberTracks = useCallback((snapshot: Track[]) => {
+  /** Record the state before an edit, so it can be undone. */
+  const recordEdit = useCallback((snapshot: Track[], touched: string[]) => {
     const stacks = history.current
-    stacks.past.push(snapshot)
+    stacks.past.push({ tracks: snapshot, touched })
     // A list is a few hundred small objects: 50 steps is generous context for
     // very little memory, while unbounded growth in a long session is not.
     if (stacks.past.length > 50) stacks.past.shift()
     // A new edit invalidates the redo branch, as it does everywhere else.
+    stacks.future.length = 0
+  }, [])
+
+  /** A fresh load is the new floor: nothing before it is undoable. */
+  const resetHistory = useCallback(() => {
+    const stacks = history.current
+    stacks.past.length = 0
     stacks.future.length = 0
   }, [])
 
@@ -148,6 +173,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     )
   }
 
+  /**
+   * Put a list back on screen, re-reading the files the step touched.
+   *
+   * Re-reading rather than reusing the remembered objects is the difference
+   * between "undo" and "pretend": an edit changed the file on disk, so only the
+   * disk knows what the tags are now.
+   */
+  const restore = useCallback(
+    async (target: Track[], touched: string[]) => {
+      const paths = touched.filter((path) => target.some((t) => t.file.path === path))
+      if (!paths.length) {
+        setTracks(target)
+        setSelectedPaths((current) => current.filter((p) => target.some((t) => t.file.path === p)))
+        return
+      }
+      try {
+        const res = await api.readTracks(paths)
+        const fresh = new Map(res.tracks.map((t) => [t.file.path, t]))
+        setTracks(target.map((t) => fresh.get(t.file.path) ?? t))
+      } catch {
+        // The re-read is a nicety; the restored list is the point.
+        setTracks(target)
+      }
+      setSelectedPaths((current) => current.filter((p) => target.some((t) => t.file.path === p)))
+    },
+    [],
+  )
+
   const undo = useCallback(() => {
     if (typing()) {
       fieldHistory('undo')
@@ -156,13 +209,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const stacks = history.current
     const previous = stacks.past.pop()
     if (!previous) return
+    // The *current* state becomes the redo step, keeping the paths that this
+    // step touched so redo re-reads the same files.
     setTracks((current) => {
-      stacks.future.push(current)
-      return previous
+      stacks.future.push({ tracks: current, touched: previous.touched })
+      return current
     })
-    // The selection may name paths the restored list no longer contains.
-    setSelectedPaths((current) => current.filter((p) => previous.some((t) => t.file.path === p)))
-  }, [])
+    void restore(previous.tracks, previous.touched)
+  }, [restore])
 
   const redo = useCallback(() => {
     if (typing()) {
@@ -173,11 +227,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const next = stacks.future.pop()
     if (!next) return
     setTracks((current) => {
-      stacks.past.push(current)
-      return next
+      stacks.past.push({ tracks: current, touched: next.touched })
+      return current
     })
-    setSelectedPaths((current) => current.filter((p) => next.some((t) => t.file.path === p)))
-  }, [])
+    void restore(next.tracks, next.touched)
+  }, [restore])
 
   const init = useCallback(async () => {
     // The engine (a bundled sidecar in the packaged app) may still be starting.
@@ -234,6 +288,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .readTracks(paths)
         .then((res) => {
           setTracks(res.tracks)
+          resetHistory()
           setFolderPath(folderPathValue)
           setSelectedPaths([])
           setSearch('')
@@ -267,7 +322,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast('Could not open the folder', 'error')
         finish()
       })
-  }, [showToast, resetSort])
+  }, [showToast, resetSort, resetHistory])
 
   // Dev convenience: ?folder=/abs/path auto-loads a folder on startup.
   useEffect(() => {
@@ -284,10 +339,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const replacePaths = useCallback(
     async (paths: string[]) => {
       if (!paths.length) {
-        setTracks((current) => {
-          rememberTracks(current)
-          return []
-        })
+        setTracks([])
+        resetHistory()
         setFolderPath(null)
         setSelectedPaths([])
         return
@@ -295,10 +348,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLoadingTracks(true)
       try {
         const res = await api.readTracks(paths)
-        setTracks((current) => {
-          rememberTracks(current)
-          return res.tracks
-        })
+        setTracks(res.tracks)
+        // A fresh load is the floor: undo must never unload the library.
+        resetHistory()
         setFolderPath(res.tracks.length ? dirOf(res.tracks[0].file.path) : null)
         setSelectedPaths([])
         setSearch('')
@@ -315,7 +367,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast, resetSort, rememberTracks],
+    [showToast, resetSort, resetHistory],
   )
 
   // Add tracks from subsequently picked folders/files without dropping the
@@ -327,11 +379,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try {
         const res = await api.readTracks(paths)
         setTracks((current) => {
-          rememberTracks(current)
           const byPath = new Map(current.map((t) => [t.file.path, t]))
           for (const t of res.tracks) byPath.set(t.file.path, t)
           return Array.from(byPath.values())
         })
+        // Adding files is loading, not editing: it moves the baseline.
+        resetHistory()
         if (res.tracks.length) {
           setFolderPath((current) => current ?? dirOf(res.tracks[0].file.path))
         }
@@ -347,7 +400,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast, rememberTracks],
+    [showToast, resetHistory],
   )
 
   // Import a mixed selection of files and folders. The engine expands
@@ -390,14 +443,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const removeTrack = useCallback(
     (path: string) => {
-      setTracks((current) => {
-        rememberTracks(current)
-        return current.filter((t) => t.file.path !== path)
-      })
+      recordEdit(tracksRef.current, [path])
+      setTracks((current) => current.filter((t) => t.file.path !== path))
       setSelectedPaths((current) => current.filter((p) => p !== path))
       setEditTrackPath((current) => (current === path ? null : current))
     },
-    [rememberTracks],
+    [recordEdit],
   )
 
   /** Remove several songs as one undoable step — what Backspace does. */
@@ -405,14 +456,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (paths: string[]) => {
       if (!paths.length) return
       const doomed = new Set(paths)
-      setTracks((current) => {
-        rememberTracks(current)
-        return current.filter((t) => !doomed.has(t.file.path))
-      })
+      recordEdit(tracksRef.current, paths)
+      setTracks((current) => current.filter((t) => !doomed.has(t.file.path)))
       setSelectedPaths((current) => current.filter((p) => !doomed.has(p)))
       setEditTrackPath((current) => (current && doomed.has(current) ? null : current))
     },
-    [rememberTracks],
+    [recordEdit],
   )
 
   const toggleSelect = useCallback((path: string, additive: boolean) => {
@@ -580,6 +629,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const writeFields = useCallback(
     async (path: string, fields: Record<string, string>, renameTo?: string | null): Promise<string[]> => {
+      // Snapshot before the write, so this is undoable like any other edit.
+      recordEdit(tracksRef.current, [path])
       const res = await api.writeTrack(path, fields, renameTo)
       if (renameTo) {
         // The file moved: drop the old path, adopt the new one.
@@ -597,36 +648,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       return res.warnings
     },
-    [removeTrack, upsertTrack],
+    [removeTrack, upsertTrack, recordEdit],
   )
 
   const setCover = useCallback(
     async (path: string, mime: string, dataBase64: string) => {
+      recordEdit(tracksRef.current, [path])
       const res = await api.setCover(path, mime, dataBase64)
       if (res.track) upsertTrack(res.track)
       res.warnings.forEach((w) => showToast(w, 'error'))
     },
-    [showToast, upsertTrack],
+    [showToast, upsertTrack, recordEdit],
   )
 
   // Apply an image that is already on disk as cover art (a file-manager drop or the
   // native image picker). Avoids base64 entirely.
   const setCoverFromFile = useCallback(
     async (path: string, imagePath: string) => {
+      recordEdit(tracksRef.current, [path])
       const res = await api.setCoverFromFile(path, imagePath)
       if (res.track) upsertTrack(res.track)
       res.warnings.forEach((w) => showToast(w, 'error'))
     },
-    [showToast, upsertTrack],
+    [showToast, upsertTrack, recordEdit],
   )
 
   const removeCover = useCallback(
     async (path: string) => {
+      recordEdit(tracksRef.current, [path])
       const res = await api.removeCover(path)
       if (res.track) upsertTrack(res.track)
       res.warnings.forEach((w) => showToast(w, 'error'))
     },
-    [showToast, upsertTrack],
+    [showToast, upsertTrack, recordEdit],
   )
 
   const startApply = useCallback(async () => {
@@ -652,9 +706,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const confirmApply = useCallback(async () => {
     if (!applyReview) return
     const targetPaths = applyReview.results.map((r) => r.path)
+    // Applying a ruleset is one edit, however many files it touches: a single
+    // undo reverses the whole batch, which is what "undo the last action" means
+    // when the last action was a batch.
+    const before = tracksRef.current
     setApplying(true)
     try {
       const result = await api.apply(targetPaths, ruleset, false)
+      recordEdit(before, targetPaths)
       setApplyReview(null)
       if (result.changed_files > 0) {
         showToast('Applied rules to ' + result.changed_files + ' file(s)', 'success')
@@ -704,7 +763,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setApplying(false)
     }
-  }, [applyReview, ruleset, showToast])
+  }, [applyReview, ruleset, showToast, recordEdit])
 
   const cancelApply = useCallback(() => setApplyReview(null), [])
 

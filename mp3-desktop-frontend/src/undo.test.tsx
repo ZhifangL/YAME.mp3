@@ -51,20 +51,39 @@ async function mount() {
 }
 
 describe('undo and redo of the track list', () => {
-  it('removing songs can be undone and redone', async () => {
+  it('undoes the last edit, not the last load', async () => {
+    // The reported bug: pressing Cmd+Z after removing a song jumped back to the
+    // previous set of loaded songs instead of reversing the removal.
     const { store } = await mount()
 
     store().removeTracks(['/music/b.mp3'])
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
 
-    // Focus something that is not a text field, or the keystroke would be
-    // routed to the field's own history.
-    ;(document.activeElement as HTMLElement | null)?.blur()
     store().undo()
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+    // Still the same three files — not an older selection of them.
+    expect(store().tracks.map((t) => t.file.path)).toEqual(PATHS)
+  })
 
-    store().redo()
+  it('never unloads the library on undo', async () => {
+    // One load, then undo repeatedly: the list must survive every press.
+    const { store } = await mount()
+    for (let i = 0; i < 5; i++) store().undo()
+    expect(screen.getByTestId('count')).toHaveTextContent('3')
+  })
+
+  it('a second load moves the baseline, so undo cannot return to the first', async () => {
+    const { store } = await mount()
+    // Loading again is not an edit: it becomes the new floor.
+    store().removeTracks(['/music/a.mp3'])
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
+
+    await store().appendPaths(['/music/d.mp3'])
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+
+    store().undo()
+    // Nothing to undo: the load cleared the history rather than adding to it.
+    expect(screen.getByTestId('count')).toHaveTextContent('3')
   })
 
   it('removing several songs is one step, not several', async () => {
@@ -73,11 +92,22 @@ describe('undo and redo of the track list', () => {
     store().removeTracks(['/music/a.mp3', '/music/c.mp3'])
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'))
 
-    ;(document.activeElement as HTMLElement | null)?.blur()
     store().undo()
     // One undo restores both; if each removal were its own step this would
     // leave one track missing.
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+  })
+
+  it('can be redone after an undo', async () => {
+    const { store } = await mount()
+
+    store().removeTracks(['/music/b.mp3'])
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
+    store().undo()
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+
+    store().redo()
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
   })
 
   it('a new edit clears the redo branch', async () => {
@@ -85,19 +115,19 @@ describe('undo and redo of the track list', () => {
 
     store().removeTracks(['/music/a.mp3'])
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
-    ;(document.activeElement as HTMLElement | null)?.blur()
     store().undo()
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
 
-    // A fresh removal after an undo must not leave the old redo reachable.
     store().removeTracks(['/music/c.mp3'])
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
     store().redo()
+    // The redo of the *first* removal is gone; the list stays as it is.
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
   })
 
   it('with a text field focused, undo leaves the list alone', async () => {
-    const { user, store } = { user: userEvent.setup(), ...(await mount()) }
+    const { store } = await mount()
+    const user = userEvent.setup()
 
     store().removeTracks(['/music/a.mp3'])
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
@@ -112,7 +142,6 @@ describe('undo and redo of the track list', () => {
 
   it('undoing with nothing to undo does nothing', async () => {
     const { store } = await mount()
-    ;(document.activeElement as HTMLElement | null)?.blur()
     store().undo()
     expect(screen.getByTestId('count')).toHaveTextContent('3')
   })

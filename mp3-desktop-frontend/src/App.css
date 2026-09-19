@@ -1702,6 +1702,10 @@ table.tracks {
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-muted);
+  /* Honour the newlines callers put in the message — the About box is one fact
+     per line. Without this, HTML collapses every "\n" into a space and the text
+     runs together, which is how it read before. */
+  white-space: pre-line;
 }
 
 .confirm-actions {
