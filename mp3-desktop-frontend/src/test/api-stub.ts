@@ -15,6 +15,9 @@ export interface RouteContext {
 
 type RouteResult = unknown | { status: number; body: unknown }
 
+/** A route may depend on the request body it is answering. */
+type Route = RouteResult | ((body: unknown) => RouteResult)
+
 export interface ApiStub {
   /** Every request made, in order. */
   calls: RouteContext[]
@@ -29,7 +32,7 @@ export interface ApiStub {
  * 200 with that JSON body. Unrouted paths fail loudly so a test can never pass
  * because a request silently 404'd.
  */
-export function stubApi(routes: Record<string, RouteResult | (() => RouteResult)>): ApiStub {
+export function stubApi(routes: Record<string, Route>): ApiStub {
   const calls: RouteContext[] = []
 
   const impl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -52,7 +55,13 @@ export function stubApi(routes: Record<string, RouteResult | (() => RouteResult)
     if (route === undefined) {
       throw new Error(`stubApi: unrouted request ${method} ${path}`)
     }
-    const result = typeof route === 'function' ? (route as () => RouteResult)() : route
+    // A route may be a function of the request, so a stub can answer according
+    // to what was asked for — `POST /api/tracks/read` returning exactly the
+    // paths it was given, for instance. Awaited, because an async route would
+    // otherwise resolve to a Promise and the caller would read `undefined` from
+    // it — silently, inside its own error handling.
+    const result =
+      typeof route === 'function' ? await (route as (body: unknown) => RouteResult)(body) : route
 
     if (result && typeof result === 'object' && 'status' in result && 'body' in result) {
       const { status, body: payload } = result as { status: number; body: unknown }

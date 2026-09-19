@@ -8,9 +8,11 @@ import { StoreContext, type BuilderDraft, type ConfirmRequest, type SortKey, typ
 import type { ApplyResponse, Preset, RegistryResponse, RuleInstance, Ruleset, Track } from './types'
 import { dirOf, joinPath } from './utils'
 
-/** One undoable step: the list as it was, and the files the edit changed. */
+/** One undoable step: the list and selection as they were, and what changed. */
 interface HistoryStep {
   tracks: Track[]
+  selection: string[]
+  /** Paths the action touched, so a re-read (if ever needed) knows where. */
   touched: string[]
 }
 
@@ -20,12 +22,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [registry, setRegistry] = useState<RegistryResponse | null>(null)
   const [presets, setPresets] = useState<Preset[]>([])
   const [tracks, setTracks] = useState<Track[]>([])
-  // Mirrors `tracks`. An edit needs the list as it was *before* it ran, and by
-  // the time a write returns, state has already moved on.
-  const tracksRef = useRef<Track[]>([])
-  useEffect(() => {
-    tracksRef.current = tracks
-  }, [tracks])
   const [folderPath, setFolderPath] = useState<string | null>(null)
   const [loadingTracks, setLoadingTracks] = useState(false)
   const [engineError, setEngineError] = useState<string | null>(null)
@@ -39,6 +35,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [appVersion, setAppVersion] = useState<string | null>(null)
 
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
+  // Mirrors of `tracks` and the selection. A history step is recorded *before*
+  // an action runs, and by the time a write returns, state has already moved
+  // on — so the step has to come from here rather than from the state value the
+  // current render closed over.
+  const tracksRef = useRef<Track[]>([])
+  const selectionRef = useRef<string[]>([])
+  useEffect(() => {
+    tracksRef.current = tracks
+  }, [tracks])
+  useEffect(() => {
+    selectionRef.current = selectedPaths
+  }, [selectedPaths])
   const [search, setSearch] = useState('')
   // null = no sorting: tracks appear in the order they were found in the
   // folder (file-manager order). Sorting kicks in on the first column click.
@@ -133,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   /** Record the state before an edit, so it can be undone. */
   const recordEdit = useCallback((snapshot: Track[], touched: string[]) => {
     const stacks = history.current
-    stacks.past.push({ tracks: snapshot, touched })
+    stacks.past.push({ tracks: snapshot, selection: selectionRef.current, touched })
     // A list is a few hundred small objects: 50 steps is generous context for
     // very little memory, while unbounded growth in a long session is not.
     if (stacks.past.length > 50) stacks.past.shift()
@@ -141,12 +149,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     stacks.future.length = 0
   }, [])
 
-  /** A fresh load is the new floor: nothing before it is undoable. */
-  const resetHistory = useCallback(() => {
-    const stacks = history.current
-    stacks.past.length = 0
-    stacks.future.length = 0
-  }, [])
+  /**
+   * Record a *load* as an action.
+   *
+   * Loading is undoable like anything else, but the first load is the floor:
+   * there is nothing before it, so recording it would make undo able to empty
+   * the window — which is exactly what must never happen.
+   */
+  const recordLoad = useCallback(() => {
+    if (!tracksRef.current.length) return
+    recordEdit(tracksRef.current, [])
+  }, [recordEdit])
 
   /**
    * Drive the focused field's own undo stack.
@@ -180,26 +193,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    * between "undo" and "pretend": an edit changed the file on disk, so only the
    * disk knows what the tags are now.
    */
-  const restore = useCallback(
-    async (target: Track[], touched: string[]) => {
-      const paths = touched.filter((path) => target.some((t) => t.file.path === path))
-      if (!paths.length) {
-        setTracks(target)
-        setSelectedPaths((current) => current.filter((p) => target.some((t) => t.file.path === p)))
-        return
-      }
-      try {
-        const res = await api.readTracks(paths)
-        const fresh = new Map(res.tracks.map((t) => [t.file.path, t]))
-        setTracks(target.map((t) => fresh.get(t.file.path) ?? t))
-      } catch {
-        // The re-read is a nicety; the restored list is the point.
-        setTracks(target)
-      }
-      setSelectedPaths((current) => current.filter((p) => target.some((t) => t.file.path === p)))
-    },
-    [],
-  )
+  /**
+   * Put a recorded step back on screen. Synchronous — nothing is fetched.
+   *
+   * An earlier version re-read the touched files so the rows showed the tags as
+   * they now are on disk. That is more truthful, but it cost an engine round
+   * trip on every press, which the user felt as lag — and undo is meant to put
+   * the list back, not to interrogate the files.
+   */
+  const restore = useCallback((step: HistoryStep) => {
+    setTracks(step.tracks)
+    // Only paths still present: a selection cannot name a file that is gone.
+    setSelectedPaths(step.selection.filter((p) => step.tracks.some((t) => t.file.path === p)))
+  }, [])
 
   const undo = useCallback(() => {
     if (typing()) {
@@ -211,11 +217,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!previous) return
     // The *current* state becomes the redo step, keeping the paths that this
     // step touched so redo re-reads the same files.
-    setTracks((current) => {
-      stacks.future.push({ tracks: current, touched: previous.touched })
-      return current
-    })
-    void restore(previous.tracks, previous.touched)
+    stacks.future.push({ tracks: tracksRef.current, selection: selectionRef.current, touched: previous.touched })
+    restore(previous)
   }, [restore])
 
   const redo = useCallback(() => {
@@ -226,11 +229,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const stacks = history.current
     const next = stacks.future.pop()
     if (!next) return
-    setTracks((current) => {
-      stacks.past.push({ tracks: current, touched: next.touched })
-      return current
-    })
-    void restore(next.tracks, next.touched)
+    stacks.past.push({ tracks: tracksRef.current, selection: selectionRef.current, touched: next.touched })
+    restore(next)
   }, [restore])
 
   const init = useCallback(async () => {
@@ -284,11 +284,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngineError(null)
     const finish = () => setLoadingTracks(false)
     const load = (folderPathValue: string, paths: string[]) => {
+      recordLoad()
       api
         .readTracks(paths)
         .then((res) => {
           setTracks(res.tracks)
-          resetHistory()
           setFolderPath(folderPathValue)
           setSelectedPaths([])
           setSearch('')
@@ -322,7 +322,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast('Could not open the folder', 'error')
         finish()
       })
-  }, [showToast, resetSort, resetHistory])
+  }, [showToast, resetSort, recordLoad])
 
   // Dev convenience: ?folder=/abs/path auto-loads a folder on startup.
   useEffect(() => {
@@ -339,18 +339,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const replacePaths = useCallback(
     async (paths: string[]) => {
       if (!paths.length) {
+        recordLoad()
         setTracks([])
-        resetHistory()
         setFolderPath(null)
         setSelectedPaths([])
         return
       }
+      recordLoad()
       setLoadingTracks(true)
       try {
         const res = await api.readTracks(paths)
         setTracks(res.tracks)
-        // A fresh load is the floor: undo must never unload the library.
-        resetHistory()
         setFolderPath(res.tracks.length ? dirOf(res.tracks[0].file.path) : null)
         setSelectedPaths([])
         setSearch('')
@@ -367,7 +366,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast, resetSort, resetHistory],
+    [showToast, resetSort, recordLoad],
   )
 
   // Add tracks from subsequently picked folders/files without dropping the
@@ -375,6 +374,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const appendPaths = useCallback(
     async (paths: string[]) => {
       if (!paths.length) return
+      // Snapshot before the fetch: after it, the list may already have moved.
+      recordLoad()
       setLoadingTracks(true)
       try {
         const res = await api.readTracks(paths)
@@ -383,8 +384,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           for (const t of res.tracks) byPath.set(t.file.path, t)
           return Array.from(byPath.values())
         })
-        // Adding files is loading, not editing: it moves the baseline.
-        resetHistory()
         if (res.tracks.length) {
           setFolderPath((current) => current ?? dirOf(res.tracks[0].file.path))
         }
@@ -400,7 +399,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast, resetHistory],
+    [showToast, recordLoad],
   )
 
   // Import a mixed selection of files and folders. The engine expands
