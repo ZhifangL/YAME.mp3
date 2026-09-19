@@ -151,11 +151,8 @@ export interface Store {
    */
   undo: () => void
   redo: () => void
-  /**
-   * Let a screen supply its own undo/redo, returning true when it handled the
-   * action. Pass null on unmount. The text fields' own history is the default.
-   */
-  registerHistory: (handler: (() => boolean) | null) => void
+  /** Remove several songs as a single undoable step. */
+  removeTracks: (paths: string[]) => void
 }
 
 export const StoreContext = createContext<Store | null>(null)

@@ -128,6 +128,7 @@ export function TrackTable() {
     clearSelection,
     openEdit,
     removeTrack,
+    removeTracks,
     folderPath,
     appendPaths,
     importPaths,
@@ -264,7 +265,7 @@ export function TrackTable() {
         if (!chosen.length) return
         e.preventDefault()
         const count = chosen.length
-        for (const path of chosen) removeTrack(path)
+        removeTracks(chosen)
         showToast('Removed ' + count + ' song' + (count === 1 ? '' : 's') + ' from the list', 'info')
         return
       }
@@ -290,7 +291,7 @@ export function TrackTable() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [clearSelection, selectRange, folderPath, importPaths, showToast, removeTrack])
+  }, [clearSelection, selectRange, folderPath, importPaths, showToast, removeTracks])
 
   const frozenSet = new Set(colState.frozen)
   const hiddenSet = new Set(colState.hidden)

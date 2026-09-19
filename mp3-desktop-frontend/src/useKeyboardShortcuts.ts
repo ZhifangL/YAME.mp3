@@ -22,7 +22,7 @@ function inTextField(target: EventTarget | null): boolean {
 }
 
 export function useKeyboardShortcuts(): void {
-  const { importPaths } = useStore()
+  const { importPaths, undo, redo } = useStore()
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -50,6 +50,26 @@ export function useKeyboardShortcuts(): void {
           return
         }
 
+        case 'z': {
+          // Undo, and Shift+Z for redo (the macOS spelling). On Windows the
+          // webview otherwise claims Ctrl+Z for its own per-field history, so
+          // the menu accelerator never sees it. The store decides whether the
+          // keystroke belongs to a text field or to the track list.
+          if (hostPlatform() === 'macos') return
+          e.preventDefault()
+          if (e.shiftKey) redo()
+          else undo()
+          return
+        }
+
+        case 'y': {
+          // Redo, the Windows spelling.
+          if (hostPlatform() === 'macos') return
+          e.preventDefault()
+          redo()
+          return
+        }
+
         default:
           return
       }
@@ -68,5 +88,5 @@ export function useKeyboardShortcuts(): void {
       window.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('contextmenu', onContextMenu, { capture: true })
     }
-  }, [importPaths])
+  }, [importPaths, undo, redo])
 }

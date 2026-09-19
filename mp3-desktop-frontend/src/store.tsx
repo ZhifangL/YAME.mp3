@@ -87,43 +87,96 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // is *not* answering — so at that moment it must not say "unknown".
     const shown = version ?? appVersion ?? 'unknown'
     const message = [
-      'A rule-based batch metadata editor for local music.',
+      'YAME (Yet Another Metadata Editor)',
       `Version ${shown}`,
-      configDir ? `Presets live in ${configDir}` : null,
-      'GNU GPL v3.0 or later. Everything runs on this machine; nothing is uploaded.',
-    ]
-      .filter(Boolean)
-      .join('\n')
+      'GNU GPL v3.0 or later',
+    ].join('\n')
     // `cancelLabel: null` — an information box has one button, not two.
     void confirm({ title: 'YAME.mp3', message, confirmLabel: 'Close', cancelLabel: null })
-  }, [confirm, version, appVersion, configDir])
+  }, [confirm, version, appVersion])
 
   /**
    * Undo/redo.
    *
-   * The browser already keeps a per-field undo stack for every text input, and
-   * on Windows Ctrl+Z reaches it natively — but Ctrl+Y does not, and the Edit
-   * menu needs something to call. `document.execCommand` drives that same stack
-   * and is the only way to reach it from here; React sees the resulting `input`
-   * event, so its controlled state stays in step.
+   * Two histories, because the app has two kinds of edit and the shortcut
+   * should follow what the user is working on:
    *
-   * A screen with richer history takes over by registering a handler (see
-   * `registerHistory`).
+   * * a text field has focus — the search box, a rule parameter, the track
+   *   editor — so the *browser's* per-field history is the right one;
+   * * otherwise the track list is what they are looking at, so the app's own
+   *   history of list changes applies.
+   *
+   * The split is not cosmetic: `document.execCommand('undo')` always targets
+   * whatever has focus, and the search box autofocuses — so before this, every
+   * Ctrl+Z was consumed as search undo and the track list could not be undone
+   * at all.
    */
-  const history = useRef<(() => boolean) | null>(null)
+  const history = useRef<{ past: Track[][]; future: Track[][] }>({ past: [], future: [] })
+
+  const rememberTracks = useCallback((snapshot: Track[]) => {
+    const stacks = history.current
+    stacks.past.push(snapshot)
+    // A list is a few hundred small objects: 50 steps is generous context for
+    // very little memory, while unbounded growth in a long session is not.
+    if (stacks.past.length > 50) stacks.past.shift()
+    // A new edit invalidates the redo branch, as it does everywhere else.
+    stacks.future.length = 0
+  }, [])
+
+  /**
+   * Drive the focused field's own undo stack.
+   *
+   * Guarded because `execCommand` is deprecated and not universally present —
+   * it exists in WebKit and WebView2, which is where the app runs, but a
+   * missing method here must not turn Ctrl+Z into a crash.
+   */
+  const fieldHistory = (command: 'undo' | 'redo') => {
+    try {
+      if (typeof document.execCommand === 'function') document.execCommand(command)
+    } catch {
+      /* nothing to undo, or unsupported — either way, nothing to report */
+    }
+  }
+
+  /** True when the keystroke belongs to a text field rather than the list. */
+  const typing = () => {
+    const el = document.activeElement
+    return (
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLTextAreaElement ||
+      (el instanceof HTMLElement && el.isContentEditable)
+    )
+  }
 
   const undo = useCallback(() => {
-    if (history.current?.()) return
-    document.execCommand('undo')
+    if (typing()) {
+      fieldHistory('undo')
+      return
+    }
+    const stacks = history.current
+    const previous = stacks.past.pop()
+    if (!previous) return
+    setTracks((current) => {
+      stacks.future.push(current)
+      return previous
+    })
+    // The selection may name paths the restored list no longer contains.
+    setSelectedPaths((current) => current.filter((p) => previous.some((t) => t.file.path === p)))
   }, [])
 
   const redo = useCallback(() => {
-    if (history.current?.()) return
-    document.execCommand('redo')
-  }, [])
-
-  const registerHistory = useCallback((handler: (() => boolean) | null) => {
-    history.current = handler
+    if (typing()) {
+      fieldHistory('redo')
+      return
+    }
+    const stacks = history.current
+    const next = stacks.future.pop()
+    if (!next) return
+    setTracks((current) => {
+      stacks.past.push(current)
+      return next
+    })
+    setSelectedPaths((current) => current.filter((p) => next.some((t) => t.file.path === p)))
   }, [])
 
   const init = useCallback(async () => {
@@ -231,7 +284,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const replacePaths = useCallback(
     async (paths: string[]) => {
       if (!paths.length) {
-        setTracks([])
+        setTracks((current) => {
+          rememberTracks(current)
+          return []
+        })
         setFolderPath(null)
         setSelectedPaths([])
         return
@@ -239,7 +295,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setLoadingTracks(true)
       try {
         const res = await api.readTracks(paths)
-        setTracks(res.tracks)
+        setTracks((current) => {
+          rememberTracks(current)
+          return res.tracks
+        })
         setFolderPath(res.tracks.length ? dirOf(res.tracks[0].file.path) : null)
         setSelectedPaths([])
         setSearch('')
@@ -256,7 +315,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast, resetSort],
+    [showToast, resetSort, rememberTracks],
   )
 
   // Add tracks from subsequently picked folders/files without dropping the
@@ -268,6 +327,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try {
         const res = await api.readTracks(paths)
         setTracks((current) => {
+          rememberTracks(current)
           const byPath = new Map(current.map((t) => [t.file.path, t]))
           for (const t of res.tracks) byPath.set(t.file.path, t)
           return Array.from(byPath.values())
@@ -287,7 +347,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast],
+    [showToast, rememberTracks],
   )
 
   // Import a mixed selection of files and folders. The engine expands
@@ -328,11 +388,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const removeTrack = useCallback((path: string) => {
-    setTracks((current) => current.filter((t) => t.file.path !== path))
-    setSelectedPaths((current) => current.filter((p) => p !== path))
-    setEditTrackPath((current) => (current === path ? null : current))
-  }, [])
+  const removeTrack = useCallback(
+    (path: string) => {
+      setTracks((current) => {
+        rememberTracks(current)
+        return current.filter((t) => t.file.path !== path)
+      })
+      setSelectedPaths((current) => current.filter((p) => p !== path))
+      setEditTrackPath((current) => (current === path ? null : current))
+    },
+    [rememberTracks],
+  )
+
+  /** Remove several songs as one undoable step — what Backspace does. */
+  const removeTracks = useCallback(
+    (paths: string[]) => {
+      if (!paths.length) return
+      const doomed = new Set(paths)
+      setTracks((current) => {
+        rememberTracks(current)
+        return current.filter((t) => !doomed.has(t.file.path))
+      })
+      setSelectedPaths((current) => current.filter((p) => !doomed.has(p)))
+      setEditTrackPath((current) => (current && doomed.has(current) ? null : current))
+    },
+    [rememberTracks],
+  )
 
   const toggleSelect = useCallback((path: string, additive: boolean) => {
     setSelectedPaths((current) => {
@@ -742,7 +823,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showAbout,
       undo,
       redo,
-      registerHistory,
+      removeTracks,
     }),
     [
       registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError, engineStarting, configDir,
@@ -754,7 +835,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeRule, toggleRule, reorderRules, openEdit,
       closeEdit, writeFields, setCover, setCoverFromFile, removeCover,
       startApply, confirmApply, cancelApply, savePreset, loadPreset,
-      deletePreset, importPresets, showToast, confirm, showAbout, undo, redo, registerHistory,
+      deletePreset, importPresets, showToast, confirm, showAbout, undo, redo, removeTracks,
     ],
   )
 

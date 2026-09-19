@@ -63,6 +63,13 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
+# The app icon, shared with the desktop shell so the taskbar shows one product
+# rather than a nameless console. Optional: a spec that fails to build because
+# an icon is missing would be worse than an icon-less engine, and the icon lives
+# in the frontend tree, which this build does not otherwise need.
+_icon = Path("..") / "mp3-desktop-frontend" / "src-tauri" / "icons" / "icon.ico"
+APP_ICON = str(_icon) if _icon.is_file() else None
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -75,7 +82,13 @@ exe = EXE(
     strip=False,
     upx=False,
     runtime_tmpdir=None,
-    console=True,
+    # Windowed, not a console application. A console build makes Windows open a
+    # terminal window titled "yame-engine" on every launch — a second window and
+    # a second taskbar entry for what is meant to be one app. The engine has no
+    # user-facing output: it talks over loopback HTTP and writes diagnostics to
+    # <config>/engine.log, so nothing is lost by having no console.
+    console=False,
+    icon=APP_ICON,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

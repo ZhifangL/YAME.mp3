@@ -9,7 +9,7 @@ from app.routers import audio, filesystem
 from app.services.presets import config_dir
 
 API_TITLE = "YAME Engine"
-API_VERSION = "1.0.0"
+API_VERSION = "1.1.0"
 
 # The app shell's own origins. Tauri serves the webview from a custom scheme,
 # and the Vite dev server from localhost.
