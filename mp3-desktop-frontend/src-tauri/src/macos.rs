@@ -15,12 +15,7 @@ use objc2_app_kit::{
 use objc2_foundation::{MainThreadMarker, NSInteger, NSPoint, NSRect, NSSize, NSString, NSURL};
 use tauri::{AppHandle, Runtime};
 
-/// An application that can open a file, as LaunchServices reports it.
-#[derive(Debug, serde::Serialize)]
-pub struct AppChoice {
-    pub name: String,
-    pub path: String,
-}
+use crate::apps::AppChoice;
 
 /// Run `work` on the main thread and wait for its result.
 ///
@@ -98,9 +93,9 @@ pub fn recommended_apps(path: &str) -> Vec<AppChoice> {
     out
 }
 
-/// Side of the square we rasterise menu icons into, in pixels. Menu items
-/// display at ~16pt, so 64px covers Retina with room to spare.
-pub const ICON_PX: u32 = 64;
+/// Side of the square we rasterise menu icons into, in pixels. Owned by
+/// [`crate::apps`] because the menu builder is what needs it, on every platform.
+use crate::apps::ICON_PX;
 
 /// Rasterised icons, keyed by application path.
 ///

@@ -8,6 +8,7 @@
 # mp3-desktop-frontend. Kept on disk for reference, no longer tracked.
 /mp3-ui/
 /docs/
+/screenshots/
 
 # ---------------------------------------------------------------- Python
 build/

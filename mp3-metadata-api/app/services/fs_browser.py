@@ -6,6 +6,7 @@ in a plain browser during development (the API runs on the same machine).
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from app.services.audio_io import AUDIO_SUFFIXES
@@ -194,15 +195,25 @@ def _search_roots() -> list[Path]:
         candidate = home / name
         if candidate.is_dir():
             roots.append(candidate)
-    volumes = Path("/Volumes")
-    if volumes.is_dir():
-        try:
-            roots.extend(p for p in volumes.iterdir() if p.is_dir())
-        except OSError:
-            pass
+    # Mounted volumes: /Volumes on macOS, /media and /mnt on Linux. Windows has
+    # drive letters instead, so each drive is searched from its root — the
+    # resolver below is dev-only, but a Windows developer should still find
+    # their music without setting YAME_CONFIG_DIR by hand.
+    for mount in ("/Volumes", "/media", "/mnt"):
+        volumes = Path(mount)
+        if volumes.is_dir():
+            try:
+                roots.extend(p for p in volumes.iterdir() if p.is_dir())
+            except OSError:
+                pass
     users = Path("/Users")
     if users.is_dir():
         roots.append(users)
+    if os.name == "nt":
+        for letter in "DEFGHIJKLMNOPQRSTUVWXYZ":
+            drive = Path(f"{letter}:\\")
+            if drive.is_dir():
+                roots.append(drive)
     _SEARCH_ROOTS.extend(roots)
     return roots
 

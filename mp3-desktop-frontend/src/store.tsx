@@ -1,17 +1,32 @@
 // Central app state: tracks, selection, ruleset, presets, overlays, toasts.
+/* eslint-disable react-hooks/exhaustive-deps -- `setTracks` and
+   `setSelectedPaths` are `useCallback`s with no dependencies, so their identity
+   never changes and they are always safe to omit from a dependency list. The
+   rule cannot know that, and listing them in ~20 callbacks would bury the
+   dependencies that do matter. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from './api'
+import { appVersion as shellVersion } from './env'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { defaultParams } from './rules'
-import { StoreContext, type BuilderDraft, type SortKey, type Store, type ToastState } from './store-context'
+import { StoreContext, type BuilderDraft, type ConfirmRequest, type SortKey, type Store, type ToastState } from './store-context'
 import type { ApplyResponse, Preset, RegistryResponse, RuleInstance, Ruleset, Track } from './types'
 import { dirOf, joinPath } from './utils'
+
+/** One undoable step: the list and selection as they were, and what changed. */
+interface HistoryStep {
+  tracks: Track[]
+  selection: string[]
+  /** Paths the action touched, so a re-read (if ever needed) knows where. */
+  touched: string[]
+}
 
 let toastCounter = 0
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [registry, setRegistry] = useState<RegistryResponse | null>(null)
   const [presets, setPresets] = useState<Preset[]>([])
-  const [tracks, setTracks] = useState<Track[]>([])
+  const [tracks, setTracksState] = useState<Track[]>([])
   const [folderPath, setFolderPath] = useState<string | null>(null)
   const [loadingTracks, setLoadingTracks] = useState(false)
   const [engineError, setEngineError] = useState<string | null>(null)
@@ -19,11 +34,61 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // first fetch or two are expected to fail. Retry before calling it an error.
   const [engineStarting, setEngineStarting] = useState(true)
   const [configDir, setConfigDir] = useState<string | null>(null)
+  /** The engine's API version, which is the app's version. */
+  const [version, setVersion] = useState<string | null>(null)
+  /** The shell's build version — correct even when the engine never answers. */
+  const [appVersion, setAppVersion] = useState<string | null>(null)
 
-  const [selectedPaths, setSelectedPaths] = useState<string[]>([])
+  const [selectedPaths, setSelectedPathsState] = useState<string[]>([])
+  // Mirrors of `tracks` and the selection. A history step is recorded *before*
+  // an action runs, and by the time a write returns, state has already moved
+  // on — so the step has to come from here rather than from the state value the
+  // current render closed over.
+  const tracksRef = useRef<Track[]>([])
+  const selectionRef = useRef<string[]>([])
+
+  /**
+   * Apply queued mirror updates once the pending renders have settled.
+   *
+   * The mirrors must hold the pre-action list at the moment an action records
+   * its step, and the post-action list by the time the next action runs. A
+   * microtask lands exactly there: after React has committed what is queued,
+   * before the next event. Doing this in an effect instead made the outcome
+   * depend on effect timing, which passed locally and failed in CI.
+   */
+  const pendingMirrors = useRef<(() => void)[]>([])
+  const queueMirror = (apply: () => void) => {
+    pendingMirrors.current.push(apply)
+    if (pendingMirrors.current.length > 1) return
+    void Promise.resolve().then(() => {
+      const queued = pendingMirrors.current.splice(0)
+      queued.forEach((run) => run())
+    })
+  }
+
+  const setTracks = useCallback((value: Track[] | ((current: Track[]) => Track[])) => {
+    setTracksState((current) => {
+      const next = typeof value === 'function' ? (value as (c: Track[]) => Track[])(current) : value
+      queueMirror(() => {
+        tracksRef.current = next
+      })
+      return next
+    })
+  }, [])
+
+  const setSelectedPaths = useCallback((value: string[] | ((current: string[]) => string[])) => {
+    setSelectedPathsState((current) => {
+      const next = typeof value === 'function' ? (value as (c: string[]) => string[])(current) : value
+      queueMirror(() => {
+        selectionRef.current = next
+      })
+      return next
+    })
+  }, [])
+
   const [search, setSearch] = useState('')
   // null = no sorting: tracks appear in the order they were found in the
-  // folder (Finder order). Sorting kicks in on the first column click.
+  // folder (file-manager order). Sorting kicks in on the first column click.
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<1 | -1>(1)
 
@@ -38,6 +103,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [applyReview, setApplyReview] = useState<ApplyResponse | null>(null)
   const [applying, setApplying] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null)
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null)
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -49,6 +115,184 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setToast((current) => (current && current.id === id ? null : current))
     }, 4200)
   }, [])
+
+  // Ask before a destructive action. Resolves false when the user dismisses the
+  // dialog by any route, so callers can use a plain `if (!ok) return`.
+  //
+  // A second request replaces the first and resolves it false: nothing in the
+  // UI can raise two at once, but a dropped promise would hang the caller
+  // forever, and hanging is worse than the wrong answer here.
+  const confirm = useCallback(
+    (request: Omit<ConfirmRequest, 'resolve'>) =>
+      new Promise<boolean>((resolve) => {
+        setConfirmRequest((previous) => {
+          previous?.resolve(false)
+          return { ...request, resolve }
+        })
+      }),
+    [],
+  )
+
+  /**
+   * The About box, raised by Help in the title bar and by Help ▸ About.
+   *
+   * Shown through the confirm dialog rather than a bespoke modal: it is a few
+   * lines of text with one button, and a second dialog component for that would
+   * be one more thing to keep styled consistently on every platform.
+   */
+  const showAbout = useCallback(() => {
+    // The version falls back to the shell's build version. The engine reports
+    // its own, but the About box is exactly what a user opens when the engine
+    // is *not* answering — so at that moment it must not say "unknown".
+    const shown = version ?? appVersion ?? 'unknown'
+    const message = [
+      'YAME (Yet Another Metadata Editor)',
+      `Version ${shown}`,
+      'GNU GPL v3.0 or later',
+    ].join('\n')
+    // `cancelLabel: null` — an information box has one button, not two.
+    void confirm({ title: 'YAME.mp3', message, confirmLabel: 'Close', cancelLabel: null })
+  }, [confirm, version, appVersion])
+
+  /**
+   * Undo/redo.
+   *
+   * Three rules, from how the user expects the shortcut to behave:
+   *
+   * 1. **Only edits are undoable.** Loading songs — opening a folder, adding
+   *    files, a drop — sets the *baseline*. Undo must never unload the library
+   *    or step back to a previous selection of it; the first load is the floor.
+   * 2. **One edit, one step.** Removing ten songs with Backspace, or applying a
+   *    ruleset to a whole batch, undoes in a single press.
+   * 3. **Focus decides** which history the keystroke belongs to: a text field
+   *    keeps its own, the track list owns everything else.
+   *
+   * Rule 3 is not cosmetic: `document.execCommand('undo')` targets whatever has
+   * focus, and the search box autofocuses — so without the split, every Ctrl+Z
+   * was consumed as search undo.
+   *
+   * Each step records the paths it touched, because undoing an *edit* has to
+   * re-read those files: the tags on disk changed, so restoring the old in-memory
+   * objects would show the user values that are no longer true.
+   */
+  const history = useRef<{ past: HistoryStep[]; future: HistoryStep[] }>({ past: [], future: [] })
+
+  /**
+   * Whether two versions of the list show the same thing.
+   *
+   * By path identity rather than deep equality: the engine hands back new
+   * objects for the same file, and two rows showing the same paths in the same
+   * order are the same list as far as undo is concerned.
+   */
+  const sameList = (a: Track[], b: Track[]) =>
+    a.length === b.length && a.every((t, i) => t.file.path === b[i].file.path)
+
+  /** Record the state before an edit, so it can be undone. */
+  const recordEdit = useCallback((snapshot: Track[], touched: string[]) => {
+    // A step identical to the one already on the stack is not a new step.
+    //
+    // Deliberately compared against the previous *step* rather than against the
+    // live list: at this moment the live list is the same array the action is
+    // about to replace, so comparing against it asks whether a value equals
+    // itself — which is always true, and would discard every edit.
+    const stacks = history.current
+    const last = stacks.past[stacks.past.length - 1]
+    if (last && sameList(last.tracks, snapshot)) {
+      // Keep the older starting point: it is the one that differs.
+      return
+    }
+    stacks.past.push({ tracks: snapshot, selection: selectionRef.current, touched })
+    // A list is a few hundred small objects: 50 steps is generous context for
+    // very little memory, while unbounded growth in a long session is not.
+    if (stacks.past.length > 50) stacks.past.shift()
+    // A new edit invalidates the redo branch, as it does everywhere else.
+    stacks.future.length = 0
+  }, [])
+
+  /**
+   * Record a *load* as an action.
+   *
+   * Loading is undoable like anything else, but the first load is the floor:
+   * there is nothing before it, so recording it would make undo able to empty
+   * the window — which is exactly what must never happen.
+   */
+  const recordLoad = useCallback(() => {
+    if (!tracksRef.current.length) return
+    recordEdit(tracksRef.current, [])
+  }, [recordEdit])
+
+  /**
+   * Drive the focused field's own undo stack.
+   *
+   * Guarded because `execCommand` is deprecated and not universally present —
+   * it exists in WebKit and WebView2, which is where the app runs, but a
+   * missing method here must not turn Ctrl+Z into a crash.
+   */
+  const fieldHistory = (command: 'undo' | 'redo') => {
+    try {
+      if (typeof document.execCommand === 'function') document.execCommand(command)
+    } catch {
+      /* nothing to undo, or unsupported — either way, nothing to report */
+    }
+  }
+
+  /** True when the keystroke belongs to a text field rather than the list. */
+  const typing = () => {
+    const el = document.activeElement
+    return (
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLTextAreaElement ||
+      (el instanceof HTMLElement && el.isContentEditable)
+    )
+  }
+
+  /**
+   * Put a recorded step back on screen. Synchronous — nothing is fetched.
+   *
+   * An earlier version re-read the touched files so the rows showed the tags as
+   * they now are on disk. That is more truthful, but it cost an engine round
+   * trip on every press, which the user felt as lag — and undo is meant to put
+   * the list back, not to interrogate the files.
+   */
+  const restore = useCallback((step: HistoryStep) => {
+    setTracks(step.tracks)
+    // Only paths still present: a selection cannot name a file that is gone.
+    setSelectedPaths(step.selection.filter((p) => step.tracks.some((t) => t.file.path === p)))
+  }, [])
+
+  const undo = useCallback(() => {
+    if (typing()) {
+      fieldHistory('undo')
+      return
+    }
+    const stacks = history.current
+    // Skip steps that would not change the list: they come from a stale
+    // recording, and spending a press to do nothing reads as a bug.
+    let previous = stacks.past.pop()
+    while (previous && sameList(previous.tracks, tracksRef.current)) {
+      previous = stacks.past.pop()
+    }
+    if (!previous) return
+    // The *current* state becomes the redo step, keeping the paths that this
+    // step touched so redo re-reads the same files.
+    stacks.future.push({ tracks: tracksRef.current, selection: selectionRef.current, touched: previous.touched })
+    restore(previous)
+  }, [restore])
+
+  const redo = useCallback(() => {
+    if (typing()) {
+      fieldHistory('redo')
+      return
+    }
+    const stacks = history.current
+    let next = stacks.future.pop()
+    while (next && sameList(next.tracks, tracksRef.current)) {
+      next = stacks.future.pop()
+    }
+    if (!next) return
+    stacks.past.push({ tracks: tracksRef.current, selection: selectionRef.current, touched: next.touched })
+    restore(next)
+  }, [restore])
 
   const init = useCallback(async () => {
     // The engine (a bundled sidecar in the packaged app) may still be starting.
@@ -74,11 +318,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         /* presets are optional at startup */
       })
+    // Asked of the shell rather than the engine: this is the About box's
+    // fallback when the engine is unreachable.
+    setAppVersion(shellVersion())
+
     api
       .health()
-      .then((res) => setConfigDir(res.config_dir))
+      .then((res) => {
+        setConfigDir(res.config_dir)
+        setVersion(res.version)
+      })
       .catch(() => {
-        /* the config path is only used for display */
+        /* the config path and version are only used for display */
       })
   }, [])
 
@@ -94,6 +345,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngineError(null)
     const finish = () => setLoadingTracks(false)
     const load = (folderPathValue: string, paths: string[]) => {
+      recordLoad()
       api
         .readTracks(paths)
         .then((res) => {
@@ -131,7 +383,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast('Could not open the folder', 'error')
         finish()
       })
-  }, [showToast, resetSort])
+  }, [showToast, resetSort, recordLoad])
 
   // Dev convenience: ?folder=/abs/path auto-loads a folder on startup.
   useEffect(() => {
@@ -148,11 +400,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const replacePaths = useCallback(
     async (paths: string[]) => {
       if (!paths.length) {
+        recordLoad()
         setTracks([])
         setFolderPath(null)
         setSelectedPaths([])
         return
       }
+      recordLoad()
       setLoadingTracks(true)
       try {
         const res = await api.readTracks(paths)
@@ -173,7 +427,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast, resetSort],
+    [showToast, resetSort, recordLoad],
   )
 
   // Add tracks from subsequently picked folders/files without dropping the
@@ -181,6 +435,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const appendPaths = useCallback(
     async (paths: string[]) => {
       if (!paths.length) return
+      // Snapshot before the fetch: after it, the list may already have moved.
+      recordLoad()
       setLoadingTracks(true)
       try {
         const res = await api.readTracks(paths)
@@ -204,7 +460,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast],
+    [showToast, recordLoad],
   )
 
   // Import a mixed selection of files and folders. The engine expands
@@ -245,11 +501,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const removeTrack = useCallback((path: string) => {
-    setTracks((current) => current.filter((t) => t.file.path !== path))
-    setSelectedPaths((current) => current.filter((p) => p !== path))
-    setEditTrackPath((current) => (current === path ? null : current))
-  }, [])
+  const removeTrack = useCallback(
+    (path: string) => {
+      recordEdit(tracksRef.current, [path])
+      setTracks((current) => current.filter((t) => t.file.path !== path))
+      setSelectedPaths((current) => current.filter((p) => p !== path))
+      setEditTrackPath((current) => (current === path ? null : current))
+    },
+    [recordEdit],
+  )
+
+  /** Remove several songs as one undoable step — what Backspace does. */
+  const removeTracks = useCallback(
+    (paths: string[]) => {
+      if (!paths.length) return
+      const doomed = new Set(paths)
+      recordEdit(tracksRef.current, paths)
+      setTracks((current) => current.filter((t) => !doomed.has(t.file.path)))
+      setSelectedPaths((current) => current.filter((p) => !doomed.has(p)))
+      setEditTrackPath((current) => (current && doomed.has(current) ? null : current))
+    },
+    [recordEdit],
+  )
 
   const toggleSelect = useCallback((path: string, additive: boolean) => {
     setSelectedPaths((current) => {
@@ -416,6 +689,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const writeFields = useCallback(
     async (path: string, fields: Record<string, string>, renameTo?: string | null): Promise<string[]> => {
+      // Snapshot before the write, so this is undoable like any other edit.
+      recordEdit(tracksRef.current, [path])
       const res = await api.writeTrack(path, fields, renameTo)
       if (renameTo) {
         // The file moved: drop the old path, adopt the new one.
@@ -433,36 +708,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       return res.warnings
     },
-    [removeTrack, upsertTrack],
+    [removeTrack, upsertTrack, recordEdit],
   )
 
   const setCover = useCallback(
     async (path: string, mime: string, dataBase64: string) => {
+      recordEdit(tracksRef.current, [path])
       const res = await api.setCover(path, mime, dataBase64)
       if (res.track) upsertTrack(res.track)
       res.warnings.forEach((w) => showToast(w, 'error'))
     },
-    [showToast, upsertTrack],
+    [showToast, upsertTrack, recordEdit],
   )
 
-  // Apply an image that is already on disk as cover art (Finder drop or the
+  // Apply an image that is already on disk as cover art (a file-manager drop or the
   // native image picker). Avoids base64 entirely.
   const setCoverFromFile = useCallback(
     async (path: string, imagePath: string) => {
+      recordEdit(tracksRef.current, [path])
       const res = await api.setCoverFromFile(path, imagePath)
       if (res.track) upsertTrack(res.track)
       res.warnings.forEach((w) => showToast(w, 'error'))
     },
-    [showToast, upsertTrack],
+    [showToast, upsertTrack, recordEdit],
   )
 
   const removeCover = useCallback(
     async (path: string) => {
+      recordEdit(tracksRef.current, [path])
       const res = await api.removeCover(path)
       if (res.track) upsertTrack(res.track)
       res.warnings.forEach((w) => showToast(w, 'error'))
     },
-    [showToast, upsertTrack],
+    [showToast, upsertTrack, recordEdit],
   )
 
   const startApply = useCallback(async () => {
@@ -488,9 +766,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const confirmApply = useCallback(async () => {
     if (!applyReview) return
     const targetPaths = applyReview.results.map((r) => r.path)
+    // Applying a ruleset is one edit, however many files it touches: a single
+    // undo reverses the whole batch, which is what "undo the last action" means
+    // when the last action was a batch.
+    const before = tracksRef.current
     setApplying(true)
     try {
       const result = await api.apply(targetPaths, ruleset, false)
+      recordEdit(before, targetPaths)
       setApplyReview(null)
       if (result.changed_files > 0) {
         showToast('Applied rules to ' + result.changed_files + ' file(s)', 'success')
@@ -540,7 +823,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setApplying(false)
     }
-  }, [applyReview, ruleset, showToast])
+  }, [applyReview, ruleset, showToast, recordEdit])
 
   const cancelApply = useCallback(() => setApplyReview(null), [])
 
@@ -655,6 +938,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deletePreset,
       importPresets,
       showToast,
+      confirm,
+      showAbout,
+      undo,
+      redo,
+      removeTracks,
     }),
     [
       registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError, engineStarting, configDir,
@@ -666,9 +954,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeRule, toggleRule, reorderRules, openEdit,
       closeEdit, writeFields, setCover, setCoverFromFile, removeCover,
       startApply, confirmApply, cancelApply, savePreset, loadPreset,
-      deletePreset, importPresets, showToast,
+      deletePreset, importPresets, showToast, confirm, showAbout, undo, redo, removeTracks,
     ],
   )
 
-  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
+  // The confirmation dialog is owned here rather than by a component: `confirm`
+  // is a store action, and keeping the dialog next to the state that backs it
+  // means a caller cannot ask without a dialog being mounted to answer.
+  return (
+    <StoreContext.Provider value={value}>
+      {children}
+      <ConfirmDialog state={confirmRequest} onClose={() => setConfirmRequest(null)} />
+    </StoreContext.Provider>
+  )
 }

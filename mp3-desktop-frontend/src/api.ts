@@ -68,7 +68,7 @@ export const api = {
   removeCover: (path: string): Promise<{ track: Track | null; warnings: string[] }> =>
     post('/tracks/cover', { path, remove: true }),
 
-  /** Embed an image that is already on disk (Finder drop / native picker). */
+  /** Embed an image that is already on disk (a drop / the native picker). */
   setCoverFromFile: (path: string, imagePath: string): Promise<{ track: Track | null; warnings: string[] }> =>
     post('/tracks/cover-from-file', { path, image_path: imagePath }),
 
@@ -84,7 +84,7 @@ export const api = {
   resolveFiles: (names: string[], previousPath?: string | null): Promise<{ paths: string[] }> =>
     post('/resolve-files', { names, previous_path: previousPath ?? null }),
 
-  /** Flatten a mixed selection of audio files and folders (a Finder drag). */
+  /** Flatten a mixed selection of audio files and folders (a file-manager drag). */
   expandPaths: (paths: string[]): Promise<{ files: string[]; skipped: string[]; truncated: boolean }> =>
     post('/paths/expand', { paths }),
 

@@ -1,13 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Core window plus the native integrations YAME uses: the OS file picker, handing paths to the system, and the save sheet.",
+  "description": "Core window plus the native integrations YAME uses: the OS file picker, handing paths to the system, the save sheet, and the caption buttons of the app's own title bar on Windows.",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-close",
     "dialog:allow-open",
     "opener:allow-reveal-item-in-dir"
   ]

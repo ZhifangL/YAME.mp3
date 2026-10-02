@@ -111,14 +111,18 @@ export function DetailPanel() {
       onPaste={onPaste}
       onDragOver={(e) => { if (track) e.preventDefault() }}
       onDrop={onDrop}
+      // On the panel, not just its header: "double-click the detail view" is
+      // what a user does, and having to aim at a 20px title strip is not what
+      // anyone means. Text fields and buttons are excluded — there a
+      // double-click selects a word or presses the control.
+      onDoubleClick={(e) => {
+        if (!track) return
+        if ((e.target as HTMLElement).closest('input, textarea, button, select, a')) return
+        openEdit(track.file.path)
+      }}
+      title={track ? 'Double-click to open the edit window' : undefined}
     >
-      <div
-        className="panel-header"
-        onDoubleClick={() => {
-          if (track) openEdit(track.file.path)
-        }}
-        title={track ? 'Double-click to open the edit window' : undefined}
-      >
+      <div className="panel-header">
         <span className="panel-title">{track ? 'Selected track' : 'Track details'}</span>
         <span className="panel-header-actions">
           <button className="panel-close" onClick={() => setCollapsed(true)} title="Collapse panel">

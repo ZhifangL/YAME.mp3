@@ -4,6 +4,8 @@ import path from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+import pkg from './package.json' with { type: 'json' }
+
 // The engine writes its actual port to <config-dir>/engine.port on startup
 // (it falls back to an ephemeral port when 8000 is taken), so the dev proxy
 // follows it instead of hard-coding 8000.
@@ -21,6 +23,11 @@ function enginePort(): number {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // The browser build has no shell to inject a version, so the package version
+  // stands in. `src/env.ts` prefers the shell's value when there is one.
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   server: {
     port: 5173,
     proxy: {

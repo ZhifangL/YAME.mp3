@@ -7,7 +7,7 @@
 // possible, a clear message otherwise — so `pnpm run dev` still exercises the
 // whole UI.
 import { api } from './api'
-import { isTauri } from './env'
+import { fileManagerName, hostPlatform, isTauri } from './env'
 import { invoke, pickMusicSelection, pickPaths, revealItemInDir } from './tauri'
 
 const PACKAGED_ONLY = ' is available in the packaged YAME app'
@@ -30,10 +30,10 @@ export async function pickMusicPaths(mode: 'open' | 'add'): Promise<string[] | n
 }
 
 /**
- * Pick any application bundle, starting in /Applications.
+ * Pick an application to open a file with.
  *
- * An `.app` is a directory, so this is the folder panel pointed at where
- * applications live — the same navigation Finder's "Other…" offers.
+ * macOS starts in /Applications, where bundles live. Windows and Linux have no
+ * single directory for this, so the dialog opens wherever the platform puts it.
  */
 export async function pickApplication(): Promise<string | null> {
   if (!isTauri()) return null
@@ -41,7 +41,7 @@ export async function pickApplication(): Promise<string | null> {
     title: 'Choose an application',
     directory: true,
     multiple: false,
-    defaultPath: '/Applications',
+    ...(hostPlatform() === 'macos' ? { defaultPath: '/Applications' } : {}),
   })
   return picked && picked.length ? picked[0] : null
 }
@@ -71,7 +71,7 @@ export async function copyFiles(paths: string[]): Promise<void> {
 }
 
 /**
- * Read absolute file paths from the clipboard (files copied in Finder).
+ * Read absolute file paths from the clipboard (files copied in Explorer/Finder).
  * Returns [] when nothing usable is there.
  */
 export async function pasteFiles(previousPath: string | null): Promise<string[]> {
@@ -95,9 +95,14 @@ export async function pasteFiles(previousPath: string | null): Promise<string[]>
   }
 }
 
-export async function revealInFinder(path: string): Promise<void> {
+/**
+ * Show a file in the platform's file manager — Explorer on Windows, Finder on
+ * macOS. The opener plugin's `revealItemInDir` already does the right thing on
+ * each platform, so only the wording changes.
+ */
+export async function revealPath(path: string): Promise<void> {
   if (await revealItemInDir(path)) return
-  throw new Error('Show in Finder' + PACKAGED_ONLY)
+  throw new Error('Show in ' + fileManagerName() + PACKAGED_ONLY)
 }
 
 /**

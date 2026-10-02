@@ -3,7 +3,7 @@ import { useStore } from '../store-context'
 import type { Preset } from '../types'
 
 export function PresetManager({ onClose }: { onClose: () => void }) {
-  const { presets, deletePreset, importPresets, showToast, configDir } = useStore()
+  const { presets, deletePreset, importPresets, showToast, configDir, confirm } = useStore()
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -58,7 +58,17 @@ export function PresetManager({ onClose }: { onClose: () => void }) {
       showToast('Select at least one ruleset to delete', 'error')
       return
     }
-    if (!window.confirm('Delete ' + ids.length + ' ruleset' + (ids.length === 1 ? '' : 's') + '?')) return
+    const count = ids.length
+    const ok = await confirm({
+      title: 'Delete ' + count + ' ruleset' + (count === 1 ? '' : 's') + '?',
+      message:
+        count === 1
+          ? 'This ruleset will be removed. Files it already changed are not affected.'
+          : 'These rulesets will be removed. Files they already changed are not affected.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
     let deleted = 0
     for (const id of ids) {
       try {
