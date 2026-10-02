@@ -1,4 +1,9 @@
 // Central app state: tracks, selection, ruleset, presets, overlays, toasts.
+/* eslint-disable react-hooks/exhaustive-deps -- `setTracks` and
+   `setSelectedPaths` are `useCallback`s with no dependencies, so their identity
+   never changes and they are always safe to omit from a dependency list. The
+   rule cannot know that, and listing them in ~20 callbacks would bury the
+   dependencies that do matter. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from './api'
 import { appVersion as shellVersion } from './env'
@@ -21,7 +26,7 @@ let toastCounter = 0
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [registry, setRegistry] = useState<RegistryResponse | null>(null)
   const [presets, setPresets] = useState<Preset[]>([])
-  const [tracks, setTracks] = useState<Track[]>([])
+  const [tracks, setTracksState] = useState<Track[]>([])
   const [folderPath, setFolderPath] = useState<string | null>(null)
   const [loadingTracks, setLoadingTracks] = useState(false)
   const [engineError, setEngineError] = useState<string | null>(null)
@@ -34,19 +39,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   /** The shell's build version — correct even when the engine never answers. */
   const [appVersion, setAppVersion] = useState<string | null>(null)
 
-  const [selectedPaths, setSelectedPaths] = useState<string[]>([])
+  const [selectedPaths, setSelectedPathsState] = useState<string[]>([])
   // Mirrors of `tracks` and the selection. A history step is recorded *before*
   // an action runs, and by the time a write returns, state has already moved
   // on — so the step has to come from here rather than from the state value the
   // current render closed over.
   const tracksRef = useRef<Track[]>([])
   const selectionRef = useRef<string[]>([])
-  useEffect(() => {
-    tracksRef.current = tracks
-  }, [tracks])
-  useEffect(() => {
-    selectionRef.current = selectedPaths
-  }, [selectedPaths])
+
+  /**
+   * Apply queued mirror updates once the pending renders have settled.
+   *
+   * The mirrors must hold the pre-action list at the moment an action records
+   * its step, and the post-action list by the time the next action runs. A
+   * microtask lands exactly there: after React has committed what is queued,
+   * before the next event. Doing this in an effect instead made the outcome
+   * depend on effect timing, which passed locally and failed in CI.
+   */
+  const pendingMirrors = useRef<(() => void)[]>([])
+  const queueMirror = (apply: () => void) => {
+    pendingMirrors.current.push(apply)
+    if (pendingMirrors.current.length > 1) return
+    void Promise.resolve().then(() => {
+      const queued = pendingMirrors.current.splice(0)
+      queued.forEach((run) => run())
+    })
+  }
+
+  const setTracks = useCallback((value: Track[] | ((current: Track[]) => Track[])) => {
+    setTracksState((current) => {
+      const next = typeof value === 'function' ? (value as (c: Track[]) => Track[])(current) : value
+      queueMirror(() => {
+        tracksRef.current = next
+      })
+      return next
+    })
+  }, [])
+
+  const setSelectedPaths = useCallback((value: string[] | ((current: string[]) => string[])) => {
+    setSelectedPathsState((current) => {
+      const next = typeof value === 'function' ? (value as (c: string[]) => string[])(current) : value
+      queueMirror(() => {
+        selectionRef.current = next
+      })
+      return next
+    })
+  }, [])
+
   const [search, setSearch] = useState('')
   // null = no sorting: tracks appear in the order they were found in the
   // folder (file-manager order). Sorting kicks in on the first column click.

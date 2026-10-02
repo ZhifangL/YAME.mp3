@@ -22,10 +22,14 @@ const PATHS = ['/music/a.mp3', '/music/b.mp3', '/music/c.mp3']
  * synchronous block skips that, which is a test artefact rather than a
  * scenario, so every action here goes through this.
  */
-async function act_(run: () => void) {
+async function act_(run: () => void | Promise<void>) {
   await act(async () => {
-    run()
+    await run()
   })
+  // One more turn: the store mirrors its list in an effect, so an action issued
+  // in the same tick as the previous one can read the list from before it. A
+  // real user's actions are separated by a commit; this is the test equivalent.
+  await act(async () => {})
 }
 
 
