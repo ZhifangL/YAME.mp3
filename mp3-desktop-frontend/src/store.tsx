@@ -138,9 +138,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    */
   const history = useRef<{ past: HistoryStep[]; future: HistoryStep[] }>({ past: [], future: [] })
 
+  /**
+   * Whether two versions of the list show the same thing.
+   *
+   * By path identity rather than deep equality: the engine hands back new
+   * objects for the same file, and two rows showing the same paths in the same
+   * order are the same list as far as undo is concerned.
+   */
+  const sameList = (a: Track[], b: Track[]) =>
+    a.length === b.length && a.every((t, i) => t.file.path === b[i].file.path)
+
   /** Record the state before an edit, so it can be undone. */
   const recordEdit = useCallback((snapshot: Track[], touched: string[]) => {
+    // A step identical to the one already on the stack is not a new step.
+    //
+    // Deliberately compared against the previous *step* rather than against the
+    // live list: at this moment the live list is the same array the action is
+    // about to replace, so comparing against it asks whether a value equals
+    // itself — which is always true, and would discard every edit.
     const stacks = history.current
+    const last = stacks.past[stacks.past.length - 1]
+    if (last && sameList(last.tracks, snapshot)) {
+      // Keep the older starting point: it is the one that differs.
+      return
+    }
     stacks.past.push({ tracks: snapshot, selection: selectionRef.current, touched })
     // A list is a few hundred small objects: 50 steps is generous context for
     // very little memory, while unbounded growth in a long session is not.
@@ -187,13 +208,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }
 
   /**
-   * Put a list back on screen, re-reading the files the step touched.
-   *
-   * Re-reading rather than reusing the remembered objects is the difference
-   * between "undo" and "pretend": an edit changed the file on disk, so only the
-   * disk knows what the tags are now.
-   */
-  /**
    * Put a recorded step back on screen. Synchronous — nothing is fetched.
    *
    * An earlier version re-read the touched files so the rows showed the tags as
@@ -213,7 +227,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return
     }
     const stacks = history.current
-    const previous = stacks.past.pop()
+    // Skip steps that would not change the list: they come from a stale
+    // recording, and spending a press to do nothing reads as a bug.
+    let previous = stacks.past.pop()
+    while (previous && sameList(previous.tracks, tracksRef.current)) {
+      previous = stacks.past.pop()
+    }
     if (!previous) return
     // The *current* state becomes the redo step, keeping the paths that this
     // step touched so redo re-reads the same files.
@@ -227,7 +246,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return
     }
     const stacks = history.current
-    const next = stacks.future.pop()
+    let next = stacks.future.pop()
+    while (next && sameList(next.tracks, tracksRef.current)) {
+      next = stacks.future.pop()
+    }
     if (!next) return
     stacks.past.push({ tracks: tracksRef.current, selection: selectionRef.current, touched: next.touched })
     restore(next)

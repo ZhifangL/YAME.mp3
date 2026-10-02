@@ -13,14 +13,6 @@ import { useStore } from './store-context'
 /** Ask the title bar to focus the search field. */
 export const FOCUS_SEARCH_EVENT = 'yame://focus-search'
 
-function inTextField(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
-  )
-}
-
 export function useKeyboardShortcuts(): void {
   const { importPaths, undo, redo } = useStore()
 
@@ -31,10 +23,11 @@ export function useKeyboardShortcuts(): void {
 
       switch (e.key.toLowerCase()) {
         case 'f':
-          // Ctrl+F / Cmd+F. `preventDefault` is what stops WebView2 opening its
-          // find bar; the menu bar's accelerator handles macOS, this handles
-          // everywhere.
-          if (inTextField(e.target)) return
+          // Ctrl+F / Cmd+F always means *this app's* search bar, wherever focus
+          // happens to be. Handling it even inside a text field is the point:
+          // returning early there let WebView2 open its own find bar, so
+          // pressing Ctrl+F twice — the second time with the search box already
+          // focused — produced a second, foreign search box.
           e.preventDefault()
           window.dispatchEvent(new Event(FOCUS_SEARCH_EVENT))
           return

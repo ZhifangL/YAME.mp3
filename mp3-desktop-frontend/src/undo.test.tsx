@@ -14,6 +14,21 @@ import { useStore } from './store-context'
 
 const PATHS = ['/music/a.mp3', '/music/b.mp3', '/music/c.mp3']
 
+/**
+ * Perform a store action and let React commit it.
+ *
+ * A user's actions are always separated by a commit — the state a handler reads
+ * is the state the previous render produced. Calling two actions in one
+ * synchronous block skips that, which is a test artefact rather than a
+ * scenario, so every action here goes through this.
+ */
+async function act_(run: () => void) {
+  await act(async () => {
+    run()
+  })
+}
+
+
 /** Renders the store and exposes it, loading three tracks as App does. */
 function Harness({ onReady }: { onReady: (store: ReturnType<typeof useStore>) => void }) {
   const store = useStore()
@@ -61,10 +76,10 @@ describe('undo and redo of the track list', () => {
     // of loaded songs instead of reversing the removal.
     const { store } = await mount()
 
-    act(() => store().removeTracks(['/music/b.mp3']))
+    await act_(() => store().removeTracks(['/music/b.mp3']))
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
 
-    act(() => store().undo())
+    await act_(() => store().undo())
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
     expect(store().tracks.map((t) => t.file.path)).toEqual(PATHS)
   })
@@ -82,22 +97,22 @@ describe('undo and redo of the track list', () => {
     await store().appendPaths(['/music/d.mp3'])
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('4'))
 
-    act(() => store().undo())
+    await act_(() => store().undo())
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
     expect(store().tracks.map((t) => t.file.path)).toEqual(PATHS)
 
     // Nothing left to take back, and the batch is still there.
-    act(() => store().undo())
+    await act_(() => store().undo())
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
   })
 
   it('removing several songs is one step, not several', async () => {
     const { store } = await mount()
 
-    act(() => store().removeTracks(['/music/a.mp3', '/music/c.mp3']))
+    await act_(() => store().removeTracks(['/music/a.mp3', '/music/c.mp3']))
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'))
 
-    act(() => store().undo())
+    await act_(() => store().undo())
     // One undo restores both; if each removal were its own step this would
     // leave one track missing.
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
@@ -106,26 +121,26 @@ describe('undo and redo of the track list', () => {
   it('can be redone after an undo', async () => {
     const { store } = await mount()
 
-    act(() => store().removeTracks(['/music/b.mp3']))
+    await act_(() => store().removeTracks(['/music/b.mp3']))
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
-    act(() => store().undo())
+    await act_(() => store().undo())
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
 
-    act(() => store().redo())
+    await act_(() => store().redo())
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
   })
 
   it('a new action clears the redo branch', async () => {
     const { store } = await mount()
 
-    act(() => store().removeTracks(['/music/a.mp3']))
+    await act_(() => store().removeTracks(['/music/a.mp3']))
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
-    act(() => store().undo())
+    await act_(() => store().undo())
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
 
-    act(() => store().removeTracks(['/music/c.mp3']))
+    await act_(() => store().removeTracks(['/music/c.mp3']))
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
-    act(() => store().redo())
+    await act_(() => store().redo())
     // The redo of the *first* removal is gone; the list stays as it is.
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
   })
@@ -134,12 +149,12 @@ describe('undo and redo of the track list', () => {
     const { store } = await mount()
     const user = userEvent.setup()
 
-    act(() => store().removeTracks(['/music/a.mp3']))
+    await act_(() => store().removeTracks(['/music/a.mp3']))
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
 
     // The search box and every other field goes through here.
     await user.click(screen.getByLabelText('a text field'))
-    act(() => store().undo())
+    await act_(() => store().undo())
 
     // Still two: that keystroke belonged to the field, not the list.
     expect(screen.getByTestId('count')).toHaveTextContent('2')
@@ -147,24 +162,46 @@ describe('undo and redo of the track list', () => {
 
   it('undoing with nothing to undo does nothing', async () => {
     const { store } = await mount()
-    act(() => store().undo())
+    await act_(() => store().undo())
     expect(screen.getByTestId('count')).toHaveTextContent('3')
   })
 
   it('undo restores the previous selection as well as the list', async () => {
     const { store } = await mount()
 
-    act(() => store().setSelection(['/music/b.mp3']))
+    await act_(() => store().setSelection(['/music/b.mp3']))
     // Awaited render between the two: the mirrors update on commit, and a real
     // user's selection and their keystroke are separate events. Calling both in
     // one tick would be a test artefact, not a scenario.
     await waitFor(() => expect(store().selectedPaths).toEqual(['/music/b.mp3']))
 
-    act(() => store().removeTracks(['/music/b.mp3']))
+    await act_(() => store().removeTracks(['/music/b.mp3']))
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
 
-    act(() => store().undo())
+    await act_(() => store().undo())
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
     expect(store().selectedPaths).toEqual(['/music/b.mp3'])
   })
+  it('one press does one step, after a load and after an edit', async () => {
+    // The reported bug: undoing a load sometimes needed two presses. It
+    // happened when a step was recorded that matched the current list, so the
+    // first press swapped like for like and looked like nothing happened.
+    const { store } = await mount()
+    await act_(() => store().removeTracks(['/music/b.mp3']))
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
+
+    await act_(() => store().appendPaths(['/music/d.mp3']))
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+
+    // Two actions, so two steps: each press must move exactly one.
+    await act_(() => store().undo())
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
+    await act_(() => store().undo())
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+
+    // Back at the first batch, which is the floor.
+    await act_(() => store().undo())
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+  })
+
 })
