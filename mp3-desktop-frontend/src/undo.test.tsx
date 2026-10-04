@@ -272,4 +272,43 @@ describe('undo and redo of the track list', () => {
       expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).toBe('Edited'),
     )
   })
+  it('writes the undone values back to the file', async () => {
+    // The reported bug: undo repainted the row but left the edit on disk, so
+    // the displayed values and the file disagreed. Undo has to *undo*.
+    const { api, store } = await mount()
+
+    await act_(() => store().writeFields('/music/b.mp3', { title: 'Edited' }))
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).toBe('Edited'),
+    )
+    const writesAfterEdit = api.callsTo('/api/tracks/write').length
+
+    await act_(() => store().undo())
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).not.toBe('Edited'),
+    )
+
+    // A second write reached the engine, carrying the earlier value.
+    await waitFor(() => expect(api.callsTo('/api/tracks/write').length).toBe(writesAfterEdit + 1))
+    const undoWrite = api.callsTo('/api/tracks/write')[writesAfterEdit]
+    expect((undoWrite.body as { path: string }).path).toBe('/music/b.mp3')
+    expect((undoWrite.body as { fields: Record<string, string> }).fields.title).not.toBe('Edited')
+  })
+
+  it('does not rewrite fields the edit never touched', async () => {
+    // The diff is the whole reason undo does not clobber the other 24 fields.
+    const { api, store } = await mount()
+
+    await act_(() => store().writeFields('/music/b.mp3', { title: 'Edited' }))
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).toBe('Edited'),
+    )
+    const before = api.callsTo('/api/tracks/write').length
+
+    await act_(() => store().undo())
+    await waitFor(() => expect(api.callsTo('/api/tracks/write').length).toBe(before + 1))
+
+    const sent = (api.callsTo('/api/tracks/write')[before].body as { fields: Record<string, string> }).fields
+    expect(Object.keys(sent)).toEqual(['title'])
+  })
 })

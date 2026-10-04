@@ -274,11 +274,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    * trip on every press, which the user felt as lag — and undo is meant to put
    * the list back, not to interrogate the files.
    */
-  const restore = useCallback((step: HistoryStep) => {
-    setTracks(step.tracks)
-    // Only paths still present: a selection cannot name a file that is gone.
-    setSelectedPaths(step.selection.filter((p) => step.tracks.some((t) => t.file.path === p)))
-  }, [])
+  const restore = useCallback(
+    (step: HistoryStep) => {
+      const current = tracksRef.current
+      const byPath = new Map(current.map((t) => [t.file.path, t]))
+
+      // Undo has to *undo*: restoring the row alone would show the earlier
+      // values while the file on disk kept the later ones, which is what the
+      // user saw. The fields that differ are computed from the two snapshots —
+      // no round trip is needed to work out what changed — and written back.
+      const before = new Map(step.tracks.map((t) => [t.file.path, t.fields]))
+      const byCover = new Map(step.tracks.map((t) => [t.file.path, t.cover]))
+      const writes: Promise<unknown>[] = []
+      for (const path of step.touched) {
+        const want = before.get(path)
+        const have = byPath.get(path)?.fields
+        if (!want || !have) continue
+        const diff: Record<string, string> = {}
+        for (const key of Object.keys(want)) {
+          if (want[key] !== have[key]) diff[key] = want[key]
+        }
+        // Only the fields that actually differ: a rule that touched one field
+        // must not rewrite the other twenty-four.
+        if (Object.keys(diff).length) {
+          writes.push(api.writeTrack(path, diff).catch(() => undefined))
+        }
+
+        // Artwork is stored separately from the tag fields, so it needs its own
+        // write — otherwise undoing a cover change would repaint the panel and
+        // leave the image embedded.
+        const wantCover = byCover.get(path) ?? null
+        const haveCover = byPath.get(path)?.cover ?? null
+        if (!sameCover(wantCover, haveCover)) {
+          writes.push(
+            wantCover
+              ? api.setCover(path, wantCover.mime, wantCover.data_base64).catch(() => undefined)
+              : api.removeCover(path).catch(() => undefined),
+          )
+        }
+      }
+      if (writes.length) void Promise.all(writes)
+
+      setTracks(step.tracks)
+      // Only paths still present: a selection cannot name a file that is gone.
+      setSelectedPaths(step.selection.filter((p) => step.tracks.some((t) => t.file.path === p)))
+    },
+    [],
+  )
 
   const undo = useCallback(() => {
     if (typing()) {
