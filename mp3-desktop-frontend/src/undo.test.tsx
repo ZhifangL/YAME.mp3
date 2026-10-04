@@ -47,11 +47,16 @@ function Harness({ onReady }: { onReady: (store: ReturnType<typeof useStore>) =>
     <div>
       <input aria-label="a text field" />
       <span data-testid="count">{store.tracks.length}</span>
+      {/* So a test can read what the user would be told. */}
+      <span data-testid="toast">{store.toast?.text ?? ''}</span>
     </div>
   )
 }
 
+const failWrites = { value: false }
+
 async function mount() {
+  failWrites.value = false
   const api = stubApi({
     '/api/rules/registry': REGISTRY_FIXTURE,
     '/api/presets': [],
@@ -68,8 +73,12 @@ async function mount() {
       return { files: asked, skipped: [], truncated: false }
     }) as never,
     // A write returns the track as it now is, which is what the row shows — and
-    // is how the engine answers a real save.
+    // is how the engine answers a real save. `failWrites` lets a test make the
+    // *next* write fail, as a read-only or moved file would.
     '/api/tracks/write': ((body: unknown) => {
+      if (failWrites.value) {
+        return { status: 422, body: { detail: 'Permission denied' } }
+      }
       const { path, fields } = (body ?? {}) as { path?: string; fields?: Record<string, string> }
       const track = trackFixture(path ?? '')
       return { track: { ...track, fields: { ...track.fields, ...(fields ?? {}) } }, warnings: [] }
@@ -310,5 +319,40 @@ describe('undo and redo of the track list', () => {
 
     const sent = (api.callsTo('/api/tracks/write')[before].body as { fields: Record<string, string> }).fields
     expect(Object.keys(sent)).toEqual(['title'])
+  })
+})
+
+describe('a write that fails while undoing', () => {
+  it('reports it, because the row would otherwise look reverted', async () => {
+    // The row reverts whether or not the file write lands, so a failure is the
+    // one outcome the user cannot see for themselves.
+    const { store } = await mount()
+
+    await act_(() => store().writeFields('/music/b.mp3', { title: 'Edited' }))
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).toBe('Edited'),
+    )
+
+    failWrites.value = true
+    await act_(() => store().undo())
+    await act_(() => {})
+
+    await waitFor(() => expect(screen.getByTestId('toast')).toHaveTextContent(/could not be written/i))
+    expect(screen.getByTestId('toast')).toHaveTextContent(/Permission denied/)
+    // And it is an error, not a passing note.
+    expect(store().toast?.kind).toBe('error')
+  })
+
+  it('says nothing about failure when the write succeeds', async () => {
+    const { store } = await mount()
+    await act_(() => store().writeFields('/music/b.mp3', { title: 'Edited' }))
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).toBe('Edited'),
+    )
+
+    await act_(() => store().undo())
+    await act_(() => {})
+    // Other toasts come and go; what must not appear is a failure warning.
+    expect(screen.getByTestId('toast')).not.toHaveTextContent(/could not be written/i)
   })
 })

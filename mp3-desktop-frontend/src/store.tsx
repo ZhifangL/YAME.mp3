@@ -297,7 +297,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // Only the fields that actually differ: a rule that touched one field
         // must not rewrite the other twenty-four.
         if (Object.keys(diff).length) {
-          writes.push(api.writeTrack(path, diff).catch(() => undefined))
+          writes.push(api.writeTrack(path, diff))
         }
 
         // Artwork is stored separately from the tag fields, so it needs its own
@@ -308,18 +308,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!sameCover(wantCover, haveCover)) {
           writes.push(
             wantCover
-              ? api.setCover(path, wantCover.mime, wantCover.data_base64).catch(() => undefined)
-              : api.removeCover(path).catch(() => undefined),
+              ? api.setCover(path, wantCover.mime, wantCover.data_base64)
+              : api.removeCover(path),
           )
         }
       }
-      if (writes.length) void Promise.all(writes)
+      if (writes.length) {
+        // The row reverts immediately; the writes follow. A failure here means
+        // the row and the file now disagree — the one outcome the user cannot
+        // see for themselves — so it is reported rather than swallowed.
+        void Promise.allSettled(writes).then((settled) => {
+          const failed = settled.filter((r) => r.status === 'rejected')
+          if (!failed.length) return
+          const reason = (failed[0] as PromiseRejectedResult).reason
+          const detail = reason instanceof Error ? reason.message : String(reason)
+          showToast(
+            failed.length === 1
+              ? 'Reverted here, but the file could not be written: ' + detail
+              : 'Reverted here, but ' + failed.length + ' files could not be written: ' + detail,
+            'error',
+          )
+        })
+      }
 
       setTracks(step.tracks)
       // Only paths still present: a selection cannot name a file that is gone.
       setSelectedPaths(step.selection.filter((p) => step.tracks.some((t) => t.file.path === p)))
     },
-    [],
+    [showToast],
   )
 
   const undo = useCallback(() => {
