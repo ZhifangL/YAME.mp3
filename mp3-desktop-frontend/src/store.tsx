@@ -10,7 +10,7 @@ import { appVersion as shellVersion } from './env'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { defaultParams } from './rules'
 import { StoreContext, type BuilderDraft, type ConfirmRequest, type SortKey, type Store, type ToastState } from './store-context'
-import type { ApplyResponse, Preset, RegistryResponse, RuleInstance, Ruleset, Track } from './types'
+import type { ApplyResponse, CoverInfo, Preset, RegistryResponse, RuleInstance, Ruleset, Track } from './types'
 import { dirOf, joinPath } from './utils'
 
 /** One undoable step: the list and selection as they were, and what changed. */
@@ -178,14 +178,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const history = useRef<{ past: HistoryStep[]; future: HistoryStep[] }>({ past: [], future: [] })
 
   /**
-   * Whether two versions of the list show the same thing.
+   * Whether two versions of the list are the same in every way that shows.
    *
-   * By path identity rather than deep equality: the engine hands back new
-   * objects for the same file, and two rows showing the same paths in the same
-   * order are the same list as far as undo is concerned.
+   * A row is its file *and its values*: comparing paths alone made a metadata
+   * edit look like no change at all — the path is exactly what an edit leaves
+   * alone — so edits were discarded as duplicates and could not be undone, and
+   * two different states of the same file collapsed into one history step.
+   *
+   * Compared by value across the tag fields and the cover, not by object
+   * identity: the engine hands back fresh objects for the same file, so two
+   * versions are equal when they would render identically.
    */
+  const sameFields = (a: Record<string, string>, b: Record<string, string>) => {
+    const keys = Object.keys(a)
+    if (keys.length !== Object.keys(b).length) return false
+    return keys.every((key) => a[key] === b[key])
+  }
+
+  const sameCover = (a: CoverInfo | null, b: CoverInfo | null) => {
+    if (a === b) return true
+    if (!a || !b) return false
+    return a.mime === b.mime && a.data_base64 === b.data_base64
+  }
+
+  const sameTrack = (a: Track, b: Track) =>
+    a.file.path === b.file.path && sameCover(a.cover, b.cover) && sameFields(a.fields, b.fields)
+
   const sameList = (a: Track[], b: Track[]) =>
-    a.length === b.length && a.every((t, i) => t.file.path === b[i].file.path)
+    a.length === b.length && a.every((track, index) => sameTrack(track, b[index]))
 
   /** Record the state before an edit, so it can be undone. */
   const recordEdit = useCallback((snapshot: Track[], touched: string[]) => {

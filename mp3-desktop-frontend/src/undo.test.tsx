@@ -22,7 +22,7 @@ const PATHS = ['/music/a.mp3', '/music/b.mp3', '/music/c.mp3']
  * synchronous block skips that, which is a test artefact rather than a
  * scenario, so every action here goes through this.
  */
-async function act_(run: () => void | Promise<void>) {
+async function act_(run: () => unknown) {
   await act(async () => {
     await run()
   })
@@ -62,7 +62,18 @@ async function mount() {
       const asked = (body as { paths?: string[] } | undefined)?.paths ?? []
       return { tracks: asked.map((path) => trackFixture(path)), errors: [] }
     }) as never,
-    '/api/paths/expand': { files: PATHS, skipped: [], truncated: false },
+    // Flattens what it is given, as the engine does.
+    '/api/paths/expand': ((body: unknown) => {
+      const asked = (body as { paths?: string[] } | undefined)?.paths ?? []
+      return { files: asked, skipped: [], truncated: false }
+    }) as never,
+    // A write returns the track as it now is, which is what the row shows — and
+    // is how the engine answers a real save.
+    '/api/tracks/write': ((body: unknown) => {
+      const { path, fields } = (body ?? {}) as { path?: string; fields?: Record<string, string> }
+      const track = trackFixture(path ?? '')
+      return { track: { ...track, fields: { ...track.fields, ...(fields ?? {}) } }, warnings: [] }
+    }) as never,
   })
   let store: ReturnType<typeof useStore> | null = null
   render(
@@ -208,4 +219,57 @@ describe('undo and redo of the track list', () => {
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
   })
 
+  it('undoes a single-track metadata edit', async () => {
+    // The reported bug: editing a song's metadata could not be undone, while
+    // load/remove undos worked. The history compared rows by *path*, and an
+    // edit is precisely the change that leaves the path alone — so the edit
+    // looked like "no change" and was discarded as a duplicate step.
+    const { store } = await mount()
+
+    await act_(() => store().writeFields('/music/b.mp3', { title: 'Edited' }))
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).toBe('Edited'),
+    )
+
+    await act_(() => store().undo())
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).not.toBe('Edited'),
+    )
+
+    // And redo puts the edit back.
+    await act_(() => store().redo())
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).toBe('Edited'),
+    )
+  })
+
+  it('keeps an edit distinct from the state before it, across reloads', async () => {
+    // The second reported bug: after A → B → A(edited), undoing back through
+    // the loads showed A *unedited* in the oldest step and edited in the newer
+    // one. That is what the path-only comparison produced — the edited and
+    // unedited lists were indistinguishable, so the history collapsed them.
+    const { store } = await mount()
+    const first = PATHS
+
+    await act_(() => store().importPaths(['/music/x.mp3'], 'replace'))
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'))
+    await act_(() => store().importPaths(first, 'replace'))
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+
+    await act_(() => store().writeFields('/music/b.mp3', { title: 'Edited' }))
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).toBe('Edited'),
+    )
+
+    // Undo the edit, then the last load: the list from the *first* load must be
+    // the unedited one, and the edit must be reachable again by redo.
+    await act_(() => store().undo())
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).not.toBe('Edited'),
+    )
+    await act_(() => store().redo())
+    await waitFor(() =>
+      expect(store().tracks.find((t) => t.file.path === '/music/b.mp3')?.fields.title).toBe('Edited'),
+    )
+  })
 })
