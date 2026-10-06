@@ -389,4 +389,39 @@ describe('a write that fails while undoing', () => {
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
     expect(store().tracks.map((t) => t.file.path)).toEqual(PATHS)
   })
+  it('ignores a duplicate that arrives after the first has committed', async () => {
+    // The Windows case, and the one an earlier test failed to reproduce: the
+    // native menu accelerator and the page handler each dispatch the action, and
+    // the second lands *after* the first has committed — so by then the two are
+    // indistinguishable by state, and a second step is consumed. Redo escaped it
+    // because the duplicate popped an already-empty stack.
+    const { store } = await mount()
+    await act_(() => store().importPaths(['/music/x.mp3'], 'replace'))
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'))
+
+    await act_(() => store().undo())
+    // Let the first land completely, as the duplicate's arrival does.
+    await act_(() => {})
+    await act_(() => store().undo())
+    await act_(() => {})
+
+    // One press's worth: back to the first batch, and it stays there.
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+    expect(store().tracks.map((t) => t.file.path)).toEqual(PATHS)
+  })
+
+  it('still honours a second, deliberate press', async () => {
+    // The guard must not swallow real presses: two separate gestures, each with
+    // a commit between them, are two steps.
+    const { store } = await mount()
+    await act_(() => store().removeTracks(['/music/a.mp3']))
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
+    await act_(() => store().removeTracks(['/music/c.mp3']))
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'))
+
+    await act_(() => store().undo())
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'))
+    await act_(() => store().undo())
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+  })
 })

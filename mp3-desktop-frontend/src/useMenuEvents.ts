@@ -85,10 +85,10 @@ export function useMenuEvents(
             s.showAbout()
             return
           case id === 'edit.undo':
-            s.undo()
+            s.undo('menu')
             return
           case id === 'edit.redo':
-            s.redo()
+            s.redo('menu')
             return
           case id === 'open':
             if (!target) return

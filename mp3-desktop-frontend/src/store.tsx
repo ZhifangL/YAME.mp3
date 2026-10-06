@@ -21,6 +21,40 @@ interface HistoryStep {
   touched: string[]
 }
 
+/**
+ * A short record of what undo and redo were asked to do, and when.
+ *
+ * Written to `window.__YAME_DIAG__` so a user can paste it: this area has been
+ * diagnosed by inference twice and been wrong twice, and the only question that
+ * actually settles it is "how many times was the action dispatched for one
+ * press, and what did each delivery see?".
+ */
+interface DiagEntry {
+  at: number
+  action: 'undo' | 'redo'
+  /** Which path took it: the page handler, or the native menu. */
+  via: 'key' | 'menu'
+  typing: boolean
+  settling: boolean
+  past: number
+  future: number
+  tracks: number
+}
+
+const diag: DiagEntry[] = []
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { __YAME_DIAG__?: DiagEntry[] }).__YAME_DIAG__ = diag
+}
+
+function noteDiag(entry: DiagEntry) {
+  diag.push(entry)
+  // Echoed so it can be read from the inspector without any extra step, and so
+  // a duplicated dispatch is visible as two consecutive lines.
+  console.log('[yame diag]', entry)
+  // Keep it small: enough for a burst around one keystroke, not a session log.
+  if (diag.length > 200) diag.shift()
+}
+
 let toastCounter = 0
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -236,6 +270,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    * the window — which is exactly what must never happen.
    */
   /**
+   * True while a restore is still waiting for its render.
+   *
+   * A duplicate delivery of one keystroke arrives before the first has
+   * committed, so at that moment the two are indistinguishable by state — both
+   * see the same list. Ignoring anything until the next commit therefore
+   * discards the duplicate and can never discard a second, deliberate press:
+   * a person cannot press, and press again, inside one render.
+   *
+   * Cleared through `queueMirror`, which runs after React commits.
+   */
+  const settling = useRef(false)
+
+  /**
    * Replace the list, recording the list it replaces as one undoable step.
    *
    * Both halves run inside the same state update, so they read `current` from
@@ -353,18 +400,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
       }
 
+      // Blocks a duplicate of this same keystroke until the render below has
+      // committed; see `settling`.
+      settling.current = true
       setTracks(step.tracks)
       // Only paths still present: a selection cannot name a file that is gone.
       setSelectedPaths(step.selection.filter((p) => step.tracks.some((t) => t.file.path === p)))
+      queueMirror(() => {
+        settling.current = false
+      })
     },
-    [showToast],
+    [showToast, setTracks, setSelectedPaths],
   )
 
-  const undo = useCallback(() => {
+  const undo = useCallback((via: 'key' | 'menu' = 'key') => {
+    noteDiag({
+      at: Math.round(performance.now()),
+      action: 'undo',
+      via,
+      typing: typing(),
+      settling: settling.current,
+      past: history.current.past.length,
+      future: history.current.future.length,
+      tracks: tracksRef.current.length,
+    })
     if (typing()) {
       fieldHistory('undo')
       return
     }
+    if (settling.current) return
     const stacks = history.current
     // Skip steps that would not change the list: they come from a stale
     // recording, and spending a press to do nothing reads as a bug.
@@ -379,11 +443,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     restore(previous)
   }, [restore])
 
-  const redo = useCallback(() => {
+  const redo = useCallback((via: 'key' | 'menu' = 'key') => {
+    noteDiag({
+      at: Math.round(performance.now()),
+      action: 'redo',
+      via,
+      typing: typing(),
+      settling: settling.current,
+      past: history.current.past.length,
+      future: history.current.future.length,
+      tracks: tracksRef.current.length,
+    })
     if (typing()) {
       fieldHistory('redo')
       return
     }
+    if (settling.current) return
     const stacks = history.current
     let next = stacks.future.pop()
     while (next && sameList(next.tracks, tracksRef.current)) {

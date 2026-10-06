@@ -149,8 +149,8 @@ export interface Store {
    * implementation, and so a screen with its own history (the track editor) can
    * take over from the browser's per-field undo.
    */
-  undo: () => void
-  redo: () => void
+  undo: (via?: 'key' | 'menu') => void
+  redo: (via?: 'key' | 'menu') => void
   /** Remove several songs as a single undoable step. */
   removeTracks: (paths: string[]) => void
 }

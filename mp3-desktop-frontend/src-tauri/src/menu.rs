@@ -35,6 +35,31 @@ const TICK: &str = "✓  ";
 #[cfg(not(target_os = "macos"))]
 const NO_TICK: &str = "     ";
 
+/// Keyboard shortcut for an Edit action, or None where the page owns the key.
+///
+/// A native menu accelerator and the page's key handler are two independent
+/// delivery paths for one keystroke, and `preventDefault` in the page cannot
+/// cancel a native menu. macOS needs the accelerator, because that is the only
+/// path that works there. Windows needs the page handler, because it is what
+/// stops WebView2 running its own per-field undo — so leaving the accelerator on
+/// as well dispatched the action twice per press, and the second delivery ate a
+/// history step.
+fn edit_accelerator(action: &str) -> Option<&'static str> {
+    #[cfg(target_os = "macos")]
+    {
+        return match action {
+            "undo" => Some("CmdOrCtrl+Z"),
+            "redo" => Some("Cmd+Shift+Z"),
+            _ => None,
+        };
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = action;
+        None
+    }
+}
+
 /// Escape a literal "&" so it is not swallowed as a mnemonic marker.
 ///
 /// Windows menus treat the character after "&" as the keyboard mnemonic and
@@ -102,17 +127,23 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::me
     // differ by platform convention — Ctrl+Y redoes on Windows, Shift+Cmd+Z on
     // macOS — and both are handled in the frontend, which knows which field has
     // focus.
-    let undo = MenuItemBuilder::with_id("edit.undo", "Undo")
-        .accelerator("CmdOrCtrl+Z")
-        .build(app)?;
-
-    #[cfg(target_os = "macos")]
-    let redo_accelerator = "Cmd+Shift+Z";
-    #[cfg(not(target_os = "macos"))]
-    let redo_accelerator = "Ctrl+Y";
-    let redo = MenuItemBuilder::with_id("edit.redo", "Redo")
-        .accelerator(redo_accelerator)
-        .build(app)?;
+    // The accelerators are declared on macOS only, and that is deliberate.
+    //
+    // A native menu accelerator and the page's own key handler are two
+    // independent delivery paths for one keystroke, and `preventDefault` in the
+    // page cannot cancel a native menu. On macOS the accelerator is the only
+    // path that works, so it must be there. On Windows the page handler is
+    // required — it is what stops WebView2 running its own per-field undo — so
+    // leaving the accelerator on as well dispatched the action twice per press.
+    // The menu items remain on both platforms; only the shortcut binding moves.
+    let undo = match edit_accelerator("undo") {
+        Some(keys) => MenuItemBuilder::with_id("edit.undo", "Undo").accelerator(keys).build(app)?,
+        None => MenuItemBuilder::with_id("edit.undo", "Undo").build(app)?,
+    };
+    let redo = match edit_accelerator("redo") {
+        Some(keys) => MenuItemBuilder::with_id("edit.redo", "Redo").accelerator(keys).build(app)?,
+        None => MenuItemBuilder::with_id("edit.redo", "Redo").build(app)?,
+    };
 
     let cut = PredefinedMenuItem::cut(app, None)?;
     let copy = PredefinedMenuItem::copy(app, None)?;
@@ -332,4 +363,30 @@ pub fn show_column_menu<R: Runtime>(
 /// Forward a menu selection to the frontend.
 pub fn emit_selection<R: Runtime>(app: &AppHandle<R>, id: &str) {
     let _ = app.emit(MENU_EVENT, id.to_string());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Edit shortcuts belong to the page on Windows and Linux.
+    ///
+    /// If this ever returns `Some` off macOS, one press is delivered twice — by
+    /// the menu and by the page handler — and the extra delivery consumes a
+    /// history step, so undo appears to need two presses.
+    #[test]
+    fn only_macos_binds_the_edit_shortcuts() {
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(edit_accelerator("undo"), Some("CmdOrCtrl+Z"));
+            assert_eq!(edit_accelerator("redo"), Some("Cmd+Shift+Z"));
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            assert_eq!(edit_accelerator("undo"), None);
+            assert_eq!(edit_accelerator("redo"), None);
+        }
+        // An action nobody bound stays unbound everywhere.
+        assert_eq!(edit_accelerator("nonsense"), None);
+    }
 }

@@ -50,8 +50,8 @@ export function useKeyboardShortcuts(): void {
           // keystroke belongs to a text field or to the track list.
           if (hostPlatform() === 'macos') return
           e.preventDefault()
-          if (e.shiftKey) redo()
-          else undo()
+          if (e.shiftKey) redo('key')
+          else undo('key')
           return
         }
 
@@ -59,7 +59,7 @@ export function useKeyboardShortcuts(): void {
           // Redo, the Windows spelling.
           if (hostPlatform() === 'macos') return
           e.preventDefault()
-          redo()
+          redo('key')
           return
         }
 

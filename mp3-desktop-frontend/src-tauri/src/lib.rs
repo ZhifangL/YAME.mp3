@@ -17,6 +17,17 @@ use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 
 pub fn run() {
     tauri::Builder::default()
+        // Registered first, and deliberately so: it must run before the setup
+        // hook, which is where the engine is started. The second instance has to
+        // exit before it spawns an engine or writes the shared port file.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // Bring the window that is already open to the front, the way
+            // every other desktop app answers a second launch.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -54,6 +65,12 @@ pub fn run() {
                 .inner_size(1280.0, 820.0)
                 .min_inner_size(940.0, 600.0)
                 .center()
+                // Kept on so a user can open the inspector (Ctrl+Shift+I, or
+                // right-click ▸ Inspect) and read the undo diagnostics when
+                // reporting a problem. This is a local, offline application, so
+                // the usual reason to close devtools — exposing internals to a
+                // remote page — does not apply.
+                .devtools(true)
                 .initialization_script(&script);
 
             // An overlay title bar lets the app draw its own header while
