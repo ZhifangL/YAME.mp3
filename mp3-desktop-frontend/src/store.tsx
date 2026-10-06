@@ -218,7 +218,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const stacks = history.current
     const last = stacks.past[stacks.past.length - 1]
     if (last && sameList(last.tracks, snapshot)) {
-      // Keep the older starting point: it is the one that differs.
       return
     }
     stacks.past.push({ tracks: snapshot, selection: selectionRef.current, touched })
@@ -236,10 +235,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    * there is nothing before it, so recording it would make undo able to empty
    * the window — which is exactly what must never happen.
    */
-  const recordLoad = useCallback(() => {
-    if (!tracksRef.current.length) return
-    recordEdit(tracksRef.current, [])
-  }, [recordEdit])
+  /**
+   * Replace the list, recording the list it replaces as one undoable step.
+   *
+   * Both halves run inside the same state update, so they read `current` from
+   * one place. Recording from a ref beforehand — which is what this used to do,
+   * before an `await` — depends on the ref happening to be current at that
+   * instant. When it is not (a previous update still queued), the step stored is
+   * the *old* list rather than the one being replaced, which duplicates a step
+   * already in the history: the next Ctrl+Z is spent discarding it and a second
+   * press is needed for the change the user actually asked for.
+   *
+   * The first load records nothing — there is nothing before it to return to,
+   * and undo must never empty the window.
+   */
+  const replaceTracks = useCallback(
+    (value: Track[] | ((current: Track[]) => Track[])) => {
+      setTracks((current) => {
+        // Recording an empty list is meaningless — there is nothing to return
+        // to — and `recordEdit` drops a step that matches the one before it, so
+        // a repeated load does not leave a duplicate for undo to chew on. The
+        // first load therefore records nothing, by itself, which is the floor.
+        if (current.length) recordEdit(current, [])
+        return typeof value === 'function' ? (value as (c: Track[]) => Track[])(current) : value
+      })
+    },
+    [setTracks, recordEdit],
+  )
 
   /**
    * Drive the focused field's own undo stack.
@@ -423,11 +445,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEngineError(null)
     const finish = () => setLoadingTracks(false)
     const load = (folderPathValue: string, paths: string[]) => {
-      recordLoad()
       api
         .readTracks(paths)
         .then((res) => {
-          setTracks(res.tracks)
+          replaceTracks(res.tracks)
           setFolderPath(folderPathValue)
           setSelectedPaths([])
           setSearch('')
@@ -461,7 +482,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast('Could not open the folder', 'error')
         finish()
       })
-  }, [showToast, resetSort, recordLoad])
+  }, [showToast, resetSort, replaceTracks])
 
   // Dev convenience: ?folder=/abs/path auto-loads a folder on startup.
   useEffect(() => {
@@ -478,17 +499,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const replacePaths = useCallback(
     async (paths: string[]) => {
       if (!paths.length) {
-        recordLoad()
-        setTracks([])
+        replaceTracks([])
         setFolderPath(null)
         setSelectedPaths([])
         return
       }
-      recordLoad()
       setLoadingTracks(true)
       try {
         const res = await api.readTracks(paths)
-        setTracks(res.tracks)
+        replaceTracks(res.tracks)
         setFolderPath(res.tracks.length ? dirOf(res.tracks[0].file.path) : null)
         setSelectedPaths([])
         setSearch('')
@@ -505,7 +524,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast, resetSort, recordLoad],
+    [showToast, resetSort, replaceTracks],
   )
 
   // Add tracks from subsequently picked folders/files without dropping the
@@ -513,12 +532,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const appendPaths = useCallback(
     async (paths: string[]) => {
       if (!paths.length) return
-      // Snapshot before the fetch: after it, the list may already have moved.
-      recordLoad()
       setLoadingTracks(true)
       try {
         const res = await api.readTracks(paths)
-        setTracks((current) => {
+        replaceTracks((current) => {
           const byPath = new Map(current.map((t) => [t.file.path, t]))
           for (const t of res.tracks) byPath.set(t.file.path, t)
           return Array.from(byPath.values())
@@ -538,7 +555,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setLoadingTracks(false)
       }
     },
-    [showToast, recordLoad],
+    [showToast, replaceTracks],
   )
 
   // Import a mixed selection of files and folders. The engine expands

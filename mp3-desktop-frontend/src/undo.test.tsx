@@ -355,4 +355,38 @@ describe('a write that fails while undoing', () => {
     // Other toasts come and go; what must not appear is a failure warning.
     expect(screen.getByTestId('toast')).not.toHaveTextContent(/could not be written/i)
   })
+  it('takes one press to go back to the previous load', async () => {
+    // The Windows report: load one, load two, then Ctrl+Z needed *two* presses
+    // to get back to load one — while Ctrl+Y took one. Only the first undo
+    // after a load was affected.
+    const { store } = await mount()          // load one
+    await act_(() => store().importPaths(['/music/x.mp3'], 'replace'))  // load two
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'))
+
+    await act_(() => store().undo())
+    // One press must be enough.
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+    expect(store().tracks.map((t) => t.file.path)).toEqual(PATHS)
+  })
+  it('ignores a repeat of the same undo before the first one lands', async () => {
+    // Windows delivers the first Ctrl+Z twice — the webview's own accelerator
+    // and the page listener both see it. The second arrives before React has
+    // committed the first, so the "is this step a duplicate?" guard cannot see
+    // it yet and a second step is consumed: two presses' worth for one press.
+    // Redo pops the other stack, which is why Ctrl+Y was never affected.
+    const { store } = await mount()
+    await act_(() => store().importPaths(['/music/x.mp3'], 'replace'))
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'))
+
+    // Both deliveries in one tick, as a duplicated accelerator would be.
+    await act(async () => {
+      store().undo()
+      store().undo()
+    })
+
+    // One press's worth of change, not two: back to the first batch, and it
+    // stays there rather than emptying.
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('3'))
+    expect(store().tracks.map((t) => t.file.path)).toEqual(PATHS)
+  })
 })
