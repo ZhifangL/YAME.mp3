@@ -78,3 +78,54 @@ needs investigating, and they can be switched on for an hour and off again.
   That is expected for now, and is the same class of problem as the macOS
   "damaged, move to Bin" issue in the README — it needs a code signing
   certificate, not a code change.
+
+## Choosing the cheapest check that answers the question
+
+The three layers above are not equally expensive, and most changes do not need
+the most expensive one. Roughly, fastest first:
+
+| Question | Command | Cost |
+| --- | --- | --- |
+| Did I break a store, rule or path helper? | `cd mp3-desktop-frontend && pnpm run check` | ~6s |
+| Did I break the engine? | `cd mp3-metadata-api && .venv/bin/python -m pytest -q` | ~1s |
+| Did I break the shell, on any platform? | `gh run list --limit 1` after a push | ~3 min |
+| Does a real Windows build come out? | dispatch with `package` ticked | ~5-8 min |
+
+**CI's verify tier runs on every push and takes about three minutes.** Its jobs
+are frontend, engine, `cargo check --all-targets` on all three platforms, and
+the shell test suite. It no longer packages anything, so a two-line change is no
+longer billed as a release.
+
+**Packaging is on demand.** The `Windows portable build` and `Windows
+installer` jobs run on `main`, or when a dispatch ticks `package`:
+
+```bash
+gh workflow run CI --ref <branch> -f package=true
+gh run watch
+```
+
+Docs-only changes (`**/*.md`, `ports/**`, `LICENSE`) skip CI entirely.
+
+### Iterating without CI at all
+
+The store, the rules and the diagnostics are platform-independent, so most
+undo/search/menu-logic changes can be settled on the Mac in seconds — and the
+whole class of bug that needed two Ctrl+Z presses was in shared code every time.
+
+```bash
+cd mp3-desktop-frontend
+pnpm run check          # types, lint and 60-odd tests, ~6s
+pnpm run desktop:dev    # the app with hot reload, for seeing it
+```
+
+For a change that is genuinely Windows-specific — window chrome, the menu bar,
+paths — the verify tier's Windows `cargo check` catches compile breaks in about
+three minutes, and only a behaviour question needs the laptop.
+
+### What is deliberately still slow
+
+The Windows release compile is the expensive part and it is not wasteful: the
+Rust cache key is now constant rather than per-commit, so the dependency build is
+paid once rather than on nearly every push. The first run after a dependency
+changes will still take minutes, and that is the correct trade for not rebuilding
+the tree every time.
