@@ -151,6 +151,8 @@ export interface Store {
    */
   undo: (via?: 'key' | 'menu') => void
   redo: (via?: 'key' | 'menu') => void
+  /** Put a record of undo/redo activity on the clipboard, for a bug report. */
+  copyDiagnostics: () => void
   /** Remove several songs as a single undoable step. */
   removeTracks: (paths: string[]) => void
 }

@@ -92,6 +92,13 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::me
                 ..AboutMetadata::default()
             }),
         )?)
+        // Diagnostics belong next to About here as well as under Help on
+        // Windows: it is the same kind of item, and it must be reachable
+        // wherever the user is, or it may as well not exist.
+        .item(
+            &MenuItemBuilder::with_id("help.diagnostics", "Copy diagnostics")
+                .build(app)?,
+        )
         .separator()
         .item(&PredefinedMenuItem::services(app, None)?)
         .separator()
@@ -196,6 +203,13 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::me
             // every platform.
             .item(
                 &MenuItemBuilder::with_id("help.about", "About YAME.mp3")
+                    .build(app)?,
+            )
+            // Beside About because it is the same kind of thing — something a
+            // user goes looking for when asked for information — and because it
+            // must be reachable without knowing what an inspector is.
+            .item(
+                &MenuItemBuilder::with_id("help.diagnostics", "Copy diagnostics")
                     .build(app)?,
             )
             .build()?;

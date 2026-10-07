@@ -6,6 +6,7 @@
    dependencies that do matter. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from './api'
+import { diagnosticsText, noteDiag } from './diagnostics'
 import { appVersion as shellVersion } from './env'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { defaultParams } from './rules'
@@ -19,40 +20,6 @@ interface HistoryStep {
   selection: string[]
   /** Paths the action touched, so a re-read (if ever needed) knows where. */
   touched: string[]
-}
-
-/**
- * A short record of what undo and redo were asked to do, and when.
- *
- * Written to `window.__YAME_DIAG__` so a user can paste it: this area has been
- * diagnosed by inference twice and been wrong twice, and the only question that
- * actually settles it is "how many times was the action dispatched for one
- * press, and what did each delivery see?".
- */
-interface DiagEntry {
-  at: number
-  action: 'undo' | 'redo'
-  /** Which path took it: the page handler, or the native menu. */
-  via: 'key' | 'menu'
-  typing: boolean
-  settling: boolean
-  past: number
-  future: number
-  tracks: number
-}
-
-const diag: DiagEntry[] = []
-if (typeof window !== 'undefined') {
-  ;(window as unknown as { __YAME_DIAG__?: DiagEntry[] }).__YAME_DIAG__ = diag
-}
-
-function noteDiag(entry: DiagEntry) {
-  diag.push(entry)
-  // Echoed so it can be read from the inspector without any extra step, and so
-  // a duplicated dispatch is visible as two consecutive lines.
-  console.log('[yame diag]', entry)
-  // Keep it small: enough for a burst around one keystroke, not a session log.
-  if (diag.length > 200) diag.shift()
 }
 
 let toastCounter = 0
@@ -468,6 +435,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     stacks.past.push({ tracks: tracksRef.current, selection: selectionRef.current, touched: next.touched })
     restore(next)
   }, [restore])
+
+  /**
+   * Put the undo/redo record on the clipboard.
+   *
+   * The point is a report that can be pasted into a message without asking the
+   * user to open an inspector — this is the third round in which undo has been
+   * reported and the cause inferred from a description.
+   */
+  const copyDiagnostics = useCallback(() => {
+    const text = diagnosticsText()
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => showToast('Diagnostics copied to the clipboard', 'success'))
+      .catch(() => {
+        // Clipboard access can be refused; the console copy is the fallback.
+        console.log('[yame diag] (clipboard refused)\n' + text)
+        showToast('Could not reach the clipboard — see the console instead', 'error')
+      })
+  }, [showToast])
 
   const init = useCallback(async () => {
     // The engine (a bundled sidecar in the packaged app) may still be starting.
@@ -1112,6 +1098,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showAbout,
       undo,
       redo,
+      copyDiagnostics,
       removeTracks,
     }),
     [
@@ -1124,7 +1111,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeRule, toggleRule, reorderRules, openEdit,
       closeEdit, writeFields, setCover, setCoverFromFile, removeCover,
       startApply, confirmApply, cancelApply, savePreset, loadPreset,
-      deletePreset, importPresets, showToast, confirm, showAbout, undo, redo, removeTracks,
+      deletePreset, importPresets, showToast, confirm, showAbout, undo, redo, removeTracks, copyDiagnostics,
     ],
   )
 
