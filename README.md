@@ -11,11 +11,27 @@ No scripting, no terminal, no subscription.
 
 ## Download
 
-Take the latest `.dmg` from the [Releases page](../../releases/latest), open it,
-and drag **YAME** into your Applications folder.
+Take the latest build from the [Releases page](../../releases/latest).
 
-- macOS 10.15 or later
-- Apple Silicon (M-series)
+**Windows** — unzip `YAME-portable-x64.zip` and run `YAME.exe`. That single file
+is the whole application: the engine travels inside it and unpacks on first run,
+so there is nothing to install, nothing is added to the registry, and
+uninstalling means deleting it. An installer is published too, for anyone who
+prefers one.
+
+**macOS** — open the `.dmg` and drag **YAME** into your Applications folder.
+
+| | |
+| --- | --- |
+| Windows | 10 or later, 64-bit |
+| macOS | 10.15 or later, Apple Silicon (M-series) |
+
+Neither build is code-signed, so Windows SmartScreen will warn on first run
+(**More info** → **Run anyway**). The macOS equivalent, and why it happens, is
+in [Signing](#signing) below.
+
+Intel Mac and Linux are not published yet: the code is ready for both, but
+neither has been built or tested on real hardware.
 
 ## Why this exists
 
@@ -223,13 +239,21 @@ frontend work at all.
 | Engine | Python 3.13, FastAPI, mutagen |
 | Packaging | PyInstaller (engine sidecar), Tauri bundler |
 
-## Windows and Linux
+## Platform support
 
-YAME is built for macOS first. The engine is pure Python and the shell is
-already platform-neutral, so porting is mostly a matter of filling in a few
-OS-specific calls — the "Open with" chooser, and putting file references on the
-clipboard. Each platform's branch in `src-tauri/src/platform.rs` is marked with
-the API it needs.
+The engine is pure Python and knows nothing about the UI; the shell is the only
+platform-specific layer, and it branches in `src-tauri/src/platform.rs`.
+
+| | Status |
+| --- | --- |
+| Windows | Shipped. Native menus and context menus, an Open With list built from the registry, files on the clipboard as `CF_HDROP`, and a job object so the engine cannot outlive the app. |
+| macOS | Shipped. Apple Silicon. |
+| Intel Mac | Code ready, not published. Needs an x86_64 Python for the engine sidecar — PyInstaller builds only for the interpreter running it. |
+| Linux | Code ready, not published. `open_default` uses `xdg-open`; the clipboard and Open With chooser still need writing, and each is marked in `platform.rs`. |
+
+Notes for anyone working on the Windows side are in
+[`ports/windows/`](ports/windows/) — a testing plan and a manual checklist,
+including which checks are cheap enough to run per change.
 
 ## License
 
