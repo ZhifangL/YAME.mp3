@@ -94,12 +94,19 @@ jobs:
         with:
           workspaces: mp3-desktop-frontend/src-tauri
           key: shell
+      # Bounded and retried, because `apt-get update` has twice stalled here
+      # long enough to hold a runner for eight minutes or more — a red herring
+      # that looks like a compile hanging. The timeout turns a stall into a
+      # prompt failure with a name.
       - name: Install Linux webview dependencies
         if: matrix.os == 'ubuntu-latest'
+        timeout-minutes: 6
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libgtk-3-dev
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=30
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libgtk-3-dev
       # tauri-build refuses to compile until the externalBin file exists.
       - run: node scripts/placeholder-sidecar.mjs
       # `--all-targets` is the point: it compiles the test code too, which plain
@@ -125,10 +132,14 @@ jobs:
         with:
           workspaces: mp3-desktop-frontend/src-tauri
           key: shell
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf libgtk-3-dev
+      - name: Install Linux webview dependencies
+        timeout-minutes: 6
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=30
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libgtk-3-dev
       - run: node scripts/placeholder-sidecar.mjs
       # Bounded independently of the job: a hanging test once held a runner for
       # 40 minutes and reported nothing about which test it was.
