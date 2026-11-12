@@ -6,8 +6,8 @@
 //!
 //! The port is chosen *before* the webview exists, so the origin can be handed
 //! to the frontend through an initialization script — the UI then polls
-//! `/api/health` until the engine answers, which means the window can appear
-//! instantly instead of waiting on Python startup.
+//! `/api/rules/registry` until the engine answers, which means the window can
+//! appear instantly instead of waiting on Python startup.
 use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
 use std::path::PathBuf;
@@ -69,6 +69,32 @@ fn unpack_dir() -> Option<PathBuf> {
     Some(base.join("YAME").join("engine").join(env!("CARGO_PKG_VERSION")))
 }
 
+/// The engine binary's own file name on this platform.
+///
+/// Three places name this file and they must agree: `build.rs` stages
+/// `<name>-<triple>` in `binaries/`, [`unpack_embedded_engine`] writes `<name>`
+/// into the per-user directory, and [`sidecar_path`] looks for both. A mismatch
+/// is not a compile error — it shows up as a silent "no bundled engine", which
+/// is exactly what a missing `.exe` did to Windows `tauri dev`.
+fn engine_exe_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "yame-engine.exe"
+    } else {
+        "yame-engine"
+    }
+}
+
+/// The name `scripts/build-sidecar.mjs` stages the engine under for a target
+/// triple — the same name `build.rs` compiles in with `include_bytes!`.
+///
+/// Split out from [`sidecar_path`] so the naming rule is testable without
+/// touching the filesystem, and so the suffix is derived in exactly one place:
+/// `build.rs` decides it from the triple string, and this must not disagree.
+fn staged_sidecar_name(triple: &str) -> String {
+    let suffix = if triple.contains("windows") { ".exe" } else { "" };
+    format!("yame-engine-{triple}{suffix}")
+}
+
 /// Write the embedded engine to disk, reusing an existing copy when it matches.
 ///
 /// Returns None when there is nothing embedded, so the caller falls back to the
@@ -76,7 +102,7 @@ fn unpack_dir() -> Option<PathBuf> {
 #[cfg(embed_sidecar)]
 fn unpack_embedded_engine() -> Option<PathBuf> {
     let dir = unpack_dir()?;
-    let name = if cfg!(target_os = "windows") { "yame-engine.exe" } else { "yame-engine" };
+    let name = engine_exe_name();
     let target = dir.join(name);
 
     // Size is enough to tell "already unpacked from this build" from "partial
@@ -111,10 +137,13 @@ fn unpack_embedded_engine() -> Option<PathBuf> {
 ///
 /// Three places, in order of preference:
 ///
-/// 1. an engine unpacked from this executable (the portable single-file build);
-/// 2. `externalBin`, which Tauri places next to the executable — the installed
-///    layout, and where a developer's staged sidecar lives during `tauri dev`;
-/// 3. `src-tauri/binaries/` with the target-triple suffix.
+/// 1. an engine unpacked from this executable (the shipped single-file build);
+/// 2. `yame-engine[.exe]` sitting next to the executable — the layout Tauri's
+///    `externalBin` used to produce, kept so an engine placed beside an
+///    installed app still wins over a developer's staged copy;
+/// 3. `src-tauri/binaries/`, where `scripts/build-sidecar.mjs` stages the engine
+///    as `yame-engine-<triple>[.exe]` — the same file this build embeds, and what
+///    `tauri dev` runs against.
 ///
 /// Returning None means "no bundled engine": `start` then attaches to whatever
 /// a developer already has running.
@@ -123,7 +152,7 @@ fn sidecar_path() -> Option<PathBuf> {
         return Some(unpacked);
     }
 
-    let name = "yame-engine";
+    let name = engine_exe_name();
 
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -136,7 +165,7 @@ fn sidecar_path() -> Option<PathBuf> {
 
     let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("binaries")
-        .join(format!("{}-{}", name, env!("TARGET_TRIPLE")));
+        .join(staged_sidecar_name(env!("TARGET_TRIPLE")));
     dev.is_file().then_some(dev)
 }
 
@@ -331,5 +360,60 @@ impl Engine {
         self.group.terminate(&mut child);
         let _ = child.wait();
         println!("[yame] engine stopped");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The staged name is what `build.rs` embeds, so it must be byte-identical
+    /// to what `scripts/build-sidecar.mjs` writes: `<name>-<triple>`, plus
+    /// `.exe` — after the triple — on Windows.
+    #[test]
+    fn the_staged_name_is_the_triple_suffixed_engine() {
+        assert_eq!(
+            staged_sidecar_name("aarch64-apple-darwin"),
+            "yame-engine-aarch64-apple-darwin"
+        );
+        assert_eq!(
+            staged_sidecar_name("x86_64-unknown-linux-gnu"),
+            "yame-engine-x86_64-unknown-linux-gnu"
+        );
+        assert_eq!(
+            staged_sidecar_name("x86_64-pc-windows-msvc"),
+            "yame-engine-x86_64-pc-windows-msvc.exe"
+        );
+    }
+
+    /// The two halves of the naming rule are derived differently — `build.rs`
+    /// and `staged_sidecar_name` read the target *triple*, `engine_exe_name`
+    /// reads `cfg!(target_os)` — and they have to agree on the platform being
+    /// built. When they did not, a Windows dev build looked for
+    /// `yame-engine-<triple>` while the staged file was `…-<triple>.exe`, and
+    /// the shell silently attached to a port with nothing on it instead.
+    #[test]
+    fn the_suffix_rules_agree_on_this_target() {
+        assert_eq!(
+            staged_sidecar_name(env!("TARGET_TRIPLE")).ends_with(".exe"),
+            cfg!(target_os = "windows"),
+        );
+        assert_eq!(
+            engine_exe_name().ends_with(".exe"),
+            cfg!(target_os = "windows"),
+        );
+    }
+
+    /// The standalone name is the unpacked one, so it takes the `.exe` but not
+    /// the triple.
+    #[test]
+    fn the_standalone_name_carries_the_triple_only_when_staged() {
+        let standalone = engine_exe_name();
+        assert!(!standalone.contains(env!("TARGET_TRIPLE")));
+        assert!(standalone.starts_with("yame-engine"));
+        assert_eq!(
+            standalone,
+            if cfg!(target_os = "windows") { "yame-engine.exe" } else { "yame-engine" }
+        );
     }
 }

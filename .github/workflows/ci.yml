@@ -107,7 +107,9 @@ jobs:
           sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=30
           sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libgtk-3-dev
-      # tauri-build refuses to compile until the externalBin file exists.
+      # Not required — build.rs embeds the engine only when the staged file is
+      # non-empty, and the crate compiles fine without it — but staging the stub
+      # keeps the "no engine built yet" case explicit instead of silent.
       - run: node scripts/placeholder-sidecar.mjs
       # `--all-targets` is the point: it compiles the test code too, which plain
       # `cargo check` skips — and a platform-specific test failing to compile is

@@ -1,14 +1,17 @@
 """PyInstaller spec for the YAME engine sidecar.
 
-Bundled into the Tauri app via `externalBin`. One file on purpose: Tauri's
-sidecar mechanism copies a single executable, and a one-file build keeps the
+The result is staged next to the Rust crate by
+`../mp3-desktop-frontend/scripts/build-sidecar.mjs` and then compiled *into* the
+app executable by `src-tauri/build.rs` (`include_bytes!`), so the shipped app is
+one file that unpacks its engine on first run. One-file output is on purpose:
+that is what makes the single-file portable build possible, and it keeps the
 bundle layout identical on macOS, Windows and Linux.
 
     pyinstaller yame-engine.spec --noconfirm    # from mp3-metadata-api/
 
 The result lands in dist/yame-engine and is copied next to src-tauri by
-scripts/build-sidecar.sh, which also appends the Rust target-triple suffix
-Tauri requires.
+scripts/build-sidecar.mjs, which also appends the Rust target-triple suffix
+build.rs expects.
 """
 from pathlib import Path
 

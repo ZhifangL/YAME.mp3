@@ -11,19 +11,43 @@ So there are three layers, in increasing order of what they prove.
 
 ## 1. CI: does it still build? (automatic, no laptop needed)
 
-`.github/workflows/ci.yml` runs on every push and pull request:
+`.github/workflows/ci.yml` runs on every push and pull request. Two tiers:
+
+**Verify** — every push and PR, all three platforms, roughly three minutes. It
+packages nothing, so a two-line change is not billed as a release.
 
 | Job | Runs on | Proves |
 | --- | --- | --- |
-| `engine` | ubuntu | 135 engine tests pass |
-| `frontend` | ubuntu | types, lint, unit tests, production build |
-| `shell` | ubuntu, **windows**, macos | `cargo test` compiles and passes, per platform |
-| `package-windows` | **windows** | the engine freezes on Windows, the app builds, an NSIS installer comes out |
+| `Frontend` | ubuntu | types, lint, unit tests, production build |
+| `Engine` | ubuntu | the pytest suite passes |
+| `Shell check (<os>)` | ubuntu, **windows**, macos | `cargo check --all-targets` — the shell *and its tests* compile per platform |
+| `Shell tests` | ubuntu | `cargo test` passes, under a 10-minute bound |
 
-The `package-windows` job uploads `YAME_<version>_x64-setup.exe` as a build
-artifact, downloadable from the run's summary page. That artifact is the thing
-to install on the laptop — it is built by a clean Windows machine with no local
-state, so if it installs and runs, the build half is settled.
+**Package** — on demand, or automatically on `main`. Minutes rather than
+seconds, because it freezes the engine and runs a full release compile.
+
+| Job | Runs on | Proves |
+| --- | --- | --- |
+| `Windows portable build` | **windows** | the engine freezes on Windows; uploads `yame-windows-portable` (`YAME-portable-x64.zip`) |
+| `Windows installer` | **windows** | an NSIS installer comes out; uploads `yame-windows-installer` |
+
+Both packaging jobs are skipped on pull requests (a PR's ref is not `main`), so
+ask for them explicitly:
+
+```bash
+gh workflow run CI --ref <branch> -f package=true
+gh run watch
+```
+
+Download either artifact from the run's summary page. The installer inside
+`yame-windows-installer` is `YAME_<version>_x64-setup.exe`; that, or the portable
+zip, is the thing to install on the laptop — it is built by a clean Windows
+machine with no local state, so if it installs and runs, the build half is
+settled.
+
+Note the asymmetry: the Windows `Shell check` job only *type-checks*, because
+`cargo test` is Linux-only. A Windows test that compiles but hangs or fails will
+not be caught here — that is what the laptop is for.
 
 Iterating on a Windows compile error needs no laptop at all: push and read the
 job log.
@@ -91,20 +115,13 @@ the most expensive one. Roughly, fastest first:
 | Did I break the shell, on any platform? | `gh run list --limit 1` after a push | ~3 min |
 | Does a real Windows build come out? | dispatch with `package` ticked | ~5-8 min |
 
-**CI's verify tier runs on every push and takes about three minutes.** Its jobs
-are frontend, engine, `cargo check --all-targets` on all three platforms, and
-the shell test suite. It no longer packages anything, so a two-line change is no
-longer billed as a release.
+The tiers themselves are described in §1. The two that matter for choosing are
+that the verify tier runs on every push and packages nothing, and that packaging
+has to be asked for — or arrives as a side effect of pushing to `main`.
 
-**Packaging is on demand.** The `Windows portable build` and `Windows
-installer` jobs run on `main`, or when a dispatch ticks `package`:
-
-```bash
-gh workflow run CI --ref <branch> -f package=true
-gh run watch
-```
-
-Docs-only changes (`**/*.md`, `ports/**`, `LICENSE`) skip CI entirely.
+Docs-only changes (`**/*.md`, `ports/**`, `LICENSE`) skip CI entirely — but only
+on `push`. `paths-ignore` does not apply to `pull_request`, so a documentation
+PR still runs the whole verify tier.
 
 ### Iterating without CI at all
 
@@ -114,7 +131,7 @@ whole class of bug that needed two Ctrl+Z presses was in shared code every time.
 
 ```bash
 cd mp3-desktop-frontend
-pnpm run check          # types, lint and 60-odd tests, ~6s
+pnpm run check          # types, lint and all 76 tests, ~6s
 pnpm run desktop:dev    # the app with hot reload, for seeing it
 ```
 

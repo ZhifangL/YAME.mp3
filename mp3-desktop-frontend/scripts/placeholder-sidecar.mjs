@@ -3,17 +3,20 @@
 // Create a zero-byte placeholder sidecar so the Rust crate can be *compiled*
 // without the real engine.
 //
-// `tauri-build` resolves the `externalBin` entry in tauri.conf.json while
-// generating the context, and fails the build outright if the file is missing
-// ("resource path `binaries/yame-engine-<triple>` doesn't exist"). That makes
-// `cargo check`, `cargo test` and a bare `cargo build` impossible in a fresh
-// checkout — including in CI, and including for anyone who only wants to work
-// on the Rust half.
+// This was originally required: `tauri-build` used to resolve the `externalBin`
+// entry in tauri.conf.json while generating the context, and failed the build
+// outright when the file was missing ("resource path `binaries/yame-engine-
+// <triple>` doesn't exist") — which made `cargo check`, `cargo test` and a bare
+// `cargo build` impossible in a fresh checkout, including in CI.
 //
-// The placeholder is never shipped: `pnpm run sidecar` overwrites it with the
-// real PyInstaller output before anything is packaged. Anything that actually
-// runs the app is unaffected, because a placeholder is not executable in any
-// useful sense.
+// YAME no longer uses `externalBin`: the engine is embedded by `build.rs`
+// instead, and compiling without a staged sidecar is now fine. The stub is kept
+// because it makes the "no engine built yet" case explicit rather than silent —
+// a checkout with no sidecar produces an app with no engine, which still works
+// on the machine that built it and nowhere else. `build.rs` embeds only a
+// non-empty file, so a stub is never baked into a binary and cannot fail at
+// runtime; `pnpm run sidecar` overwrites it with the real engine before
+// anything is packaged.
 //
 // Usage:  node scripts/placeholder-sidecar.mjs [triple]
 import { spawnSync } from 'node:child_process'

@@ -4,9 +4,10 @@ Ordered so that an early failure makes the later steps meaningless. Each item
 says what to do, what should happen, and what a failure means — so a failed step
 can be reported without a second round trip.
 
-Suggested setup: install the CI artifact (`YAME_<version>_x64-setup.exe` from the
-latest `package-windows` job), and have a folder of MP3s ready. The repo's
-`sample-mp3/` is a good one if you copy it over.
+Suggested setup: install the CI artifact — the installer inside the
+`yame-windows-installer` artifact from a run on `main` (or a dispatch with
+`package` ticked), or the portable zip from `yame-windows-portable` — and have a
+folder of MP3s ready. The repo's `sample-mp3/` is a good one if you copy it over.
 
 ## 0. Install
 
@@ -52,9 +53,15 @@ latest `package-windows` job), and have a folder of MP3s ready. The repo's
 - [ ] Press `Alt+F` (or `Alt` alone): the File menu should open by keyboard.
       The `&`-mnemonic handling is custom, so this is worth a click.
 
-*Note: Edit ▸ Undo/Redo were removed on Windows because the underlying API is
-macOS-only; Cut/Copy/Paste/Select All remain and are what make clipboard
-shortcuts work in the text fields.*
+- [ ] Press `Ctrl+Z` after an edit: the last change is reverted. `Ctrl+Y` (and
+      `Shift+Ctrl+Z`) redoes it.
+- [ ] With the cursor in a text field, `Ctrl+Z` should undo *typing in that
+      field*, not the track list — focus decides which history gets the key.
+- [ ] Edit ▸ Undo and Edit ▸ Redo are present on Windows but deliberately carry
+      **no keyboard accelerator**: the page's own key handler owns those keys,
+      because a native accelerator would deliver one press twice (the menu *and*
+      WebView2's per-field undo) and the second delivery would eat a history
+      step. So the menu items are click-to-use; the shortcuts come from the app.
 
 ## 3. Opening music
 

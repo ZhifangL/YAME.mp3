@@ -8,12 +8,12 @@ table).
 
 - `TitleBar` — traffic lights, wordmark, global search filter
 - `RulesSidebar` — rule-type menu, dynamic `RuleBuilder` (rendered from the
-  engine's registry, live preview via `/api/preview`), rule cards with
+  engine's registry, live preview via `/api/preview-batch`), rule cards with
   on/off toggles, presets, Apply
 - `TrackTable` — sortable columns, click/multi-select, double-click to edit,
   search filter, empty state
-- `DetailPanel` — floating, draggable "iPod" panel: Title/Album/Artist/Comment
-  inline edits + cover art
+- `DetailPanel` — floating, collapsible "iPod" panel: Title/Album/Artist/Comment
+  inline edits + cover art, with a double-click to open the full editor
 - `EditTrackOverlay` — full edit window with a collapsible "More info" grid,
   filename rename and cover replacement
 - `StatusBar` — selection/total counts, duration and size
@@ -43,7 +43,7 @@ and supervising the Python engine as a bundled sidecar.
 | `src/macos.rs` | AppKit: the mixed open panel, LaunchServices app list, app icons |
 | `src/menu.rs` | The menu bar and both native context menus |
 | `src/platform.rs` | Open, clipboard file copy/paste, the save sheet |
-| `tauri.conf.json` | Bundle identity, CSP, `externalBin` sidecar |
+| `tauri.conf.json` | Bundle identity, CSP, bundle targets, macOS signing |
 | `capabilities/default.json` | Permissions for the dialog and opener plugins |
 
 ```bash
@@ -53,8 +53,14 @@ pnpm run sidecar      # rebuild just the PyInstaller engine binary
 pnpm run icon         # regenerate the app icon from public/favicon.svg
 ```
 
+**After changing anything in `mp3-metadata-api/`, run `pnpm run sidecar`.** `desktop:dev`
+does *not* rebuild the engine: it runs whatever binary is already staged in
+`src-tauri/binaries/`, so a stale one is easy to end up with and looks like a frontend bug.
+The same applies to `tauri build` — `pnpm run package` chains the sidecar build for exactly
+this reason.
+
 The app icon is **generated from `public/favicon.svg`**, never drawn separately:
-`scripts/build-icon.sh` extracts the live `<svg>`, renders it at 1024×1024 and
+`scripts/build-icon.mjs` extracts the live `<svg>`, renders it at 1024×1024 and
 runs `tauri icon`. Edit the favicon, then run `pnpm run icon`.
 
 Two Tauri commands must stay `async` — `save_playlist`, and the two that pop up

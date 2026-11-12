@@ -17,7 +17,7 @@
     "desktop:dev": "tauri dev",
     "desktop:build": "node scripts/build-sidecar.mjs && tauri build",
     "package": "node scripts/build-sidecar.mjs && tauri build",
-    "icon": "bash scripts/build-icon.sh"
+    "icon": "node scripts/build-icon.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

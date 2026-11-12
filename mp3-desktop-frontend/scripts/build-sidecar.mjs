@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 //
-// Stage the Python engine where Tauri expects a sidecar.
+// Freeze the Python engine and stage it where the Rust build looks for it.
 //
-// Tauri's `externalBin` entry "binaries/yame-engine" resolves at build time to
-// "binaries/yame-engine-<target-triple>", plus ".exe" on Windows. This script
-// runs PyInstaller and copies its output under that name.
+// The staged name carries the Rust target triple — "binaries/yame-engine-
+// <target-triple>", plus ".exe" on Windows — because `build.rs` compiles that
+// exact path into the shell with `include_bytes!`, and `engine.rs` unpacks it
+// on first run. There is no `externalBin` copy any more: shipping the engine
+// twice made the macOS bundle 36.8 MB.
+//
+// A missing or empty file is not an error; it just means "no engine embedded",
+// which is what `placeholder-sidecar.mjs` relies on so a fresh checkout can be
+// compiled without PyInstaller.
 //
 // Node rather than bash on purpose: the Windows build has no bash, and
 // PyInstaller cannot cross-compile, so the sidecar must be produced by a

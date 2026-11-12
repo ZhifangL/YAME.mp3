@@ -22,7 +22,7 @@ uv sync                      # first time only (includes the dev/test tools)
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest        # 101 tests, no fixtures on disk
+`.venv/bin/python -m pytest        # 148 tests, no fixtures on disk
 ```
 
 Covers the wildcard layer, all nine rules, ruleset ordering and
@@ -41,8 +41,10 @@ The desktop app bundles this engine as a single PyInstaller binary:
 
 `yame-engine.spec` collects uvicorn's dynamically-resolved loop/protocol
 modules, which static analysis cannot see. `../mp3-desktop-frontend/scripts/
-build-sidecar.sh` runs this and copies the result to the target-triple name
-Tauri's `externalBin` requires. PyInstaller does not cross-compile: build the
+build-sidecar.mjs` runs this and copies the result to a target-triple name in
+`src-tauri/binaries/`, which the shell's `build.rs` then embeds into the app
+executable (there is no `externalBin` copy any more — the engine travels inside
+the app and unpacks on first run). PyInstaller does not cross-compile: build the
 sidecar on each platform you ship.
 
 ## Layout
@@ -81,7 +83,7 @@ tests/                   pytest suite
 | POST | `/api/tracks/cover` | Replace or remove (`remove: true`) embedded cover art |
 | GET | `/api/rules/registry` | Rule + field + audio-suffix catalog (the UI renders from this) |
 | POST | `/api/preview` | Dry-run one rule on given field values |
-| POST | `/api/apply` | Dry-run or apply a ruleset to many files |
+| POST | `/api/apply` | Dry-run or apply a ruleset to many files, streaming NDJSON |
 | GET/PUT/DELETE | `/api/presets` | Named rulesets (JSON in `~/.config/yame/`) |
 | POST | `/api/presets/import` | Import exported rulesets |
 
