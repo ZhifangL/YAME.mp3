@@ -2,7 +2,7 @@ import { useStore } from '../store-context'
 import { formatDuration, formatSize } from '../utils'
 
 export function StatusBar() {
-  const { tracks, selectedPaths } = useStore()
+  const { tracks, selectedPaths, applyProgress, applying } = useStore()
   const selected = tracks.filter((t) => selectedPaths.includes(t.file.path))
   const totalDur = tracks.reduce((sum, t) => sum + (t.audio?.duration_seconds ?? 0), 0)
   const selDur = selected.reduce((sum, t) => sum + (t.audio?.duration_seconds ?? 0), 0)
@@ -24,6 +24,13 @@ export function StatusBar() {
         )}
       </span>
       <span className="spacer" />
+      {/* The dry run has no modal of its own — it opens one when it finishes —
+          so a long read is reported here. */}
+      {applyProgress && (
+        <span className="statusbar-progress">
+          {applying ? 'Applying' : 'Checking'} {applyProgress.done} of {applyProgress.total}…
+        </span>
+      )}
     </footer>
   )
 }

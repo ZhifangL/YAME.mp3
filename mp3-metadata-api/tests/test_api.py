@@ -16,6 +16,32 @@ def client() -> TestClient:
     return TestClient(create_app())
 
 
+def apply_events(client: TestClient, paths, ruleset, dry_run: bool) -> list[dict]:
+    """POST /api/apply and decode its NDJSON stream into events.
+
+    The endpoint streams one JSON object per line (see the route docstring), so
+    every test that wants the result has to walk it. Keeping the decoding in one
+    place means a test asserts the assembled outcome, not the wire format.
+    """
+    res = client.post(
+        "/api/apply",
+        json={"paths": paths, "ruleset": ruleset, "dry_run": dry_run},
+    )
+    assert res.status_code == 200, res.text
+    return [json.loads(line) for line in res.text.splitlines() if line.strip()]
+
+
+def apply(client: TestClient, paths, ruleset, dry_run: bool) -> dict:
+    """POST /api/apply and assemble the stream into the client's shape."""
+    events = apply_events(client, paths, ruleset, dry_run)
+    return {
+        "results": [e["result"] for e in events if e["type"] == "file"],
+        "total_files": events[-1]["total_files"],
+        "changed_files": events[-1]["changed_files"],
+        "dry_run": events[-1]["dry_run"],
+    }
+
+
 def test_health_reports_the_config_dir(client: TestClient, monkeypatch, tmp_path: Path):
     monkeypatch.setenv("YAME_CONFIG_DIR", str(tmp_path / "cfg"))
     body = client.get("/api/health").json()
@@ -104,13 +130,52 @@ def test_apply_dry_run_and_write(client: TestClient, audio_file: Path):
     ruleset = {"name": "t", "rules": [
         {"type": "WRITE", "params": {"field": "title", "value": "Batch"}, "enabled": True},
     ]}
-    dry = client.post("/api/apply", json={"paths": [str(audio_file)], "ruleset": ruleset, "dry_run": True}).json()
+    dry = apply(client, [str(audio_file)], ruleset, True)
     assert dry["dry_run"] is True
     assert dry["results"][0]["written"] is False
 
-    real = client.post("/api/apply", json={"paths": [str(audio_file)], "ruleset": ruleset, "dry_run": False}).json()
+    real = apply(client, [str(audio_file)], ruleset, False)
     assert real["results"][0]["written"] is True
     assert client.get("/api/metadata", params={"path": str(audio_file)}).json()["fields"]["title"] == "Batch"
+
+
+def test_apply_streams_start_then_one_event_per_file_then_done(
+    client: TestClient, audio_file: Path, make_audio
+):
+    """The stream's shape is the contract the client parses.
+
+    `start` must arrive before any file is touched — it is what lets the client
+    size a progress bar and bound silence rather than total duration — and the
+    `done` counts must match the events in between.
+    """
+    second = make_audio(audio_file.parent / "two.wav")
+    ruleset = {"name": "t", "rules": [
+        {"type": "WRITE", "params": {"field": "title", "value": "Batch"}, "enabled": True},
+    ]}
+
+    events = apply_events(client, [str(audio_file), str(second)], ruleset, True)
+
+    assert events[0] == {"type": "start", "total": 2, "dry_run": True}
+    files = [e for e in events if e["type"] == "file"]
+    assert [e["index"] for e in files] == [0, 1]
+    assert [e["result"]["filename"] for e in files] == ["song.wav", "two.wav"]
+    assert events[-1] == {
+        "type": "done", "total_files": 2, "changed_files": 2, "dry_run": True,
+    }
+
+
+def test_apply_events_are_one_json_object_per_line(client: TestClient, audio_file: Path):
+    """Newline-delimited, not pretty-printed: a client reads it line by line."""
+    ruleset = {"name": "t", "rules": [
+        {"type": "CLEAR", "params": {"field": "comment"}, "enabled": True},
+    ]}
+    res = client.post(
+        "/api/apply",
+        json={"paths": [str(audio_file)], "ruleset": ruleset, "dry_run": True},
+    )
+    lines = res.text.splitlines()
+    assert len(lines) == 3
+    assert all(json.loads(line)["type"] in {"start", "file", "done"} for line in lines)
 
 
 def test_apply_rename_plus_cover_does_not_500(client: TestClient, audio_file: Path, png_bytes: bytes):
@@ -125,10 +190,7 @@ def test_apply_rename_plus_cover_does_not_500(client: TestClient, audio_file: Pa
             "name": "art.png",
         }}, "enabled": True},
     ]}
-    res = client.post("/api/apply", json={"paths": [str(audio_file)], "ruleset": ruleset, "dry_run": False})
-    assert res.status_code == 200
-
-    row = res.json()["results"][0]
+    row = apply(client, [str(audio_file)], ruleset, False)["results"][0]
     assert row["warnings"] == []
     assert row["new_filename"] == "Both.wav"
     moved = audio_file.parent / "Both.wav"

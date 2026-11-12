@@ -5,7 +5,7 @@
    rule cannot know that, and listing them in ~20 callbacks would bury the
    dependencies that do matter. */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { api } from './api'
+import { api, type ApplyProgress } from './api'
 import { diagnosticsText, noteDiag } from './diagnostics'
 import { appVersion as shellVersion } from './env'
 import { ConfirmDialog } from './components/ConfirmDialog'
@@ -103,6 +103,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [editTrackPath, setEditTrackPath] = useState<string | null>(null)
   const [applyReview, setApplyReview] = useState<ApplyResponse | null>(null)
   const [applying, setApplying] = useState(false)
+  /**
+   * How far the running batch has got, or null when none is running.
+   *
+   * Updated at most ~100 times per batch (see `reportProgress`): the store is one
+   * context value, so every update re-renders every consumer — including the
+   * track table, which draws each row twice. Per-file updates on a 5,000-file
+   * batch would be thousands of full re-renders for a number that only needs to
+   * look alive.
+   */
+  const [applyProgress, setApplyProgress] = useState<ApplyProgress | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null)
 
@@ -899,6 +909,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [showToast, upsertTrack, recordEdit],
   )
 
+  /**
+   * Pass batch progress to the UI, sampled to at most ~100 updates per batch.
+   *
+   * The store is a single context value, so every update re-renders every
+   * consumer — including the track table, which draws each row twice. Reporting
+   * every file of a 5,000-file batch would be thousands of full re-renders for a
+   * number that only needs to look alive, so only the first, the last and each
+   * whole percent are published.
+   */
+  const reportProgress = useCallback((progress: ApplyProgress) => {
+    const step = Math.max(1, Math.floor(progress.total / 100))
+    if (progress.done === 0 || progress.done >= progress.total || progress.done % step === 0) {
+      setApplyProgress(progress)
+    }
+  }, [])
+
   const startApply = useCallback(async () => {
     const targetPaths =
       selectedPaths.length > 0 ? selectedPaths : tracks.map((t) => t.file.path)
@@ -911,13 +937,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast('Add at least one rule to apply', 'info')
       return
     }
+    setApplyProgress({ done: 0, total: targetPaths.length })
     try {
-      const result = await api.apply(targetPaths, ruleset, true)
+      const result = await api.apply(targetPaths, ruleset, true, reportProgress)
       setApplyReview(result)
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err), 'error')
+    } finally {
+      setApplyProgress(null)
     }
-  }, [selectedPaths, tracks, ruleset, showToast])
+  }, [selectedPaths, tracks, ruleset, showToast, reportProgress])
 
   const confirmApply = useCallback(async () => {
     if (!applyReview) return
@@ -927,8 +956,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // when the last action was a batch.
     const before = tracksRef.current
     setApplying(true)
+    setApplyProgress({ done: 0, total: targetPaths.length })
     try {
-      const result = await api.apply(targetPaths, ruleset, false)
+      const result = await api.apply(targetPaths, ruleset, false, reportProgress)
       recordEdit(before, targetPaths)
       setApplyReview(null)
       if (result.changed_files > 0) {
@@ -978,8 +1008,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast(err instanceof Error ? err.message : String(err), 'error')
     } finally {
       setApplying(false)
+      setApplyProgress(null)
     }
-  }, [applyReview, ruleset, showToast, recordEdit])
+  }, [applyReview, ruleset, showToast, recordEdit, reportProgress])
 
   const cancelApply = useCallback(() => setApplyReview(null), [])
 
@@ -1060,6 +1091,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       editTrackPath,
       applyReview,
       applying,
+      applyProgress,
       toast,
       init,
       appendPaths,
@@ -1104,7 +1136,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [
       registry, presets, activePresetId, tracks, folderPath, loadingTracks, engineError, engineStarting, configDir,
       selectedPaths, search, sortKey, sortDir, ruleset, draft, dragOver, editTrackPath,
-      applyReview, applying, toast,
+      applyReview, applying, applyProgress, toast,
       init, appendPaths, importPaths, removeTrack,
       toggleSelect, selectRange, setSelection, clearSelection, setSearch, cycleSort,
       setDraft, updateDraftParam, updateDraftType, cancelDraft, commitDraft,

@@ -5,16 +5,17 @@ package this same FastAPI app runs as the Python sidecar.
 """
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from app.fields import RULE_FIELDS
 from app.schemas import (
     ApplyRequest,
     ExpandPathsRequest,
     ExpandPathsResponse,
-    ApplyResponse,
     CoverFromFileRequest,
     CoverWriteRequest,
     FilesResolveRequest,
@@ -37,7 +38,8 @@ from app.schemas import (
 from app.services.audio_io import (
     AUDIO_SUFFIXES,
     MetadataError,
-    apply_ruleset,
+    is_changed,
+    iter_apply_results,
     read_track,
     remove_cover,
     write_cover,
@@ -215,21 +217,66 @@ def _run_preview(filename: str, folder: str, fields: dict, cover, rule):
     return {"changes": changes, "fields": out_fields, "filename": ctx.filename}
 
 
+def _ndjson(payload: dict) -> bytes:
+    """One newline-delimited JSON event."""
+    return (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+
+
 @router.post(
     "/api/apply",
-    response_model=ApplyResponse,
-    summary="Run a ruleset over many files (dry_run computes changes only)",
+    summary="Run a ruleset over many files, streaming one result per file",
+    response_class=StreamingResponse,
 )
 def apply(request: ApplyRequest):
+    """Run a ruleset over ``paths`` (``dry_run`` computes changes only).
+
+    The response is **newline-delimited JSON**, not a single body, because a
+    batch is arbitrarily long and the client needs to see it move:
+
+        {"type": "start", "total": N, "dry_run": bool}
+        {"type": "file", "index": i, "result": {...}}      # once per file
+        {"type": "done", "total_files": N, "changed_files": C, "dry_run": bool}
+
+    Two properties matter and are why this streams rather than returning at the
+    end. The engine is the only thing that knows how long a batch will take, so
+    it reports progress and lets the client bound *silence* instead of total
+    duration — no timeout has to guess at the size of the library. And because
+    the per-file work happens inside the generator, a client that disconnects
+    stops the walk at the next file rather than leaving it running.
+
+    The 400s below are raised before the response starts, so an unstartable
+    request is still an ordinary JSON error the client can read.
+    """
     if not request.paths:
         raise HTTPException(status_code=400, detail="No files selected.")
     if not request.ruleset.rules:
         raise HTTPException(status_code=400, detail="The ruleset has no rules.")
-    return apply_ruleset(
-        request.paths,
-        {"name": request.ruleset.name, "rules": [r.model_dump() for r in request.ruleset.rules]},
-        dry_run=request.dry_run,
-    )
+
+    ruleset = {
+        "name": request.ruleset.name,
+        "rules": [r.model_dump() for r in request.ruleset.rules],
+    }
+    paths = list(request.paths)
+    dry_run = bool(request.dry_run)
+    total = len(paths)
+
+    def events():
+        # Sent before any file is touched, so the client's silence budget covers
+        # only real work and the UI can size a progress bar immediately.
+        yield _ndjson({"type": "start", "total": total, "dry_run": dry_run})
+        changed = 0
+        for index, result in enumerate(iter_apply_results(paths, ruleset, dry_run)):
+            if is_changed(result):
+                changed += 1
+            yield _ndjson({"type": "file", "index": index, "result": result})
+        yield _ndjson({
+            "type": "done",
+            "total_files": total,
+            "changed_files": changed,
+            "dry_run": dry_run,
+        })
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")
 
 
 @router.post(

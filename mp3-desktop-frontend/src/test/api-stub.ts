@@ -18,6 +18,88 @@ type RouteResult = unknown | { status: number; body: unknown }
 /** A route may depend on the request body it is answering. */
 type Route = RouteResult | ((body: unknown) => RouteResult)
 
+function abortError(): Error {
+  const err = new Error('The operation was aborted.')
+  err.name = 'AbortError'
+  return err
+}
+
+/**
+ * Attach a caller's abort signal to a response body, as the real `fetch` does.
+ *
+ * `api.ts` leans on that: the batch timeout aborts the request and expects the
+ * pending `reader.read()` to *reject*. A stub whose body ignored the signal
+ * could not test a stalled stream at all — the read would simply never settle.
+ */
+function withAbort(res: Response, signal?: AbortSignal | null): Response {
+  if (!signal || !res.body) return res
+
+  const source = res.body.getReader()
+  let aborted = false
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (aborted) {
+        controller.error(abortError())
+        return
+      }
+      const { value, done } = await source.read()
+      // Checked after the await too: cancelling the source settles a pending
+      // read as "done", which would otherwise look like a clean end of stream.
+      if (aborted) {
+        controller.error(abortError())
+        return
+      }
+      if (done) controller.close()
+      else controller.enqueue(value)
+    },
+    cancel(reason) {
+      return source.cancel(reason)
+    },
+  })
+
+  signal.addEventListener(
+    'abort',
+    () => {
+      aborted = true
+      void source.cancel(abortError())
+    },
+    { once: true },
+  )
+
+  return new Response(body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: res.headers,
+  })
+}
+
+/**
+ * Reject with an `AbortError` if `signal` aborts before `value` settles.
+ *
+ * The real `fetch` does this, and `api.ts` now depends on it: its 60s timeout
+ * aborts the request, and the client distinguishes "timed out" from "could not
+ * connect" by whether it was the one that aborted. Without this, a test cannot
+ * tell a request that was abandoned from one that simply never answered.
+ */
+async function raceAbort<T>(value: T | Promise<T>, signal?: AbortSignal | null): Promise<T> {
+  if (!signal) return value
+  if (signal.aborted) throw abortError()
+  return await new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError())
+    signal.addEventListener('abort', onAbort, { once: true })
+    Promise.resolve(value).then(
+      (settled) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(settled)
+      },
+      (err: unknown) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(err)
+      },
+    )
+  })
+}
+
 export interface ApiStub {
   /** Every request made, in order. */
   calls: RouteContext[]
@@ -59,9 +141,18 @@ export function stubApi(routes: Record<string, Route>): ApiStub {
     // to what was asked for — `POST /api/tracks/read` returning exactly the
     // paths it was given, for instance. Awaited, because an async route would
     // otherwise resolve to a Promise and the caller would read `undefined` from
-    // it — silently, inside its own error handling.
-    const result =
-      typeof route === 'function' ? await (route as (body: unknown) => RouteResult)(body) : route
+    // it — silently, inside its own error handling. Raced against the request's
+    // abort signal, so a route that never answers behaves like a real hung
+    // request rather than hanging the test.
+    const result = await raceAbort(
+      typeof route === 'function' ? (route as (body: unknown) => RouteResult)(body) : route,
+      init?.signal,
+    )
+
+    // A route may hand back a whole `Response` when it needs control the JSON
+    // shortcuts cannot give — a streamed body, for instance, which is how
+    // `/api/apply` answers.
+    if (result instanceof Response) return withAbort(result, init?.signal)
 
     if (result && typeof result === 'object' && 'status' in result && 'body' in result) {
       const { status, body: payload } = result as { status: number; body: unknown }

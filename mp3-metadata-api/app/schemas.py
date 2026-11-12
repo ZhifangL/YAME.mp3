@@ -236,6 +236,16 @@ class ApplyFileResult(BaseModel):
 
 
 class ApplyResponse(BaseModel):
+    """The *assembled* result of `POST /api/apply`, which streams NDJSON.
+
+    The endpoint sends one ``{"type": "file", "result": …}`` event per file and
+    closes with a ``done`` event carrying the counts, precisely so a long batch
+    does not have to fit in one body. This model documents the shape a client
+    builds from that stream — the frontend's `ApplyResponse` type mirrors it —
+    and is what `apply_ruleset()` returns for callers that collect instead of
+    streaming.
+    """
+
     results: list[ApplyFileResult] = []
     total_files: int = 0
     changed_files: int = 0

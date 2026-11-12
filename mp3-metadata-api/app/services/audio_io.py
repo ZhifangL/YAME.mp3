@@ -865,23 +865,47 @@ def write_cover_from_file(path: str, image_path: str) -> list[str]:
     return write_cover(path, mime, data)
 
 
-def apply_ruleset(paths: list[str], ruleset: dict, dry_run: bool) -> dict:
-    """Run a ruleset over many files. dry_run=True only computes changes."""
-    results: list[dict] = []
+def is_changed(result: dict) -> bool:
+    """True when a per-file result carries a change.
+
+    One definition, shared by the streamed endpoint and the collected summary, so
+    "N files changed" cannot mean two different things.
+    """
+    return bool(result.get("changes"))
+
+
+def iter_apply_results(paths: list[str], ruleset: dict, dry_run: bool):
+    """Yield one result per file, in the order given.
+
+    A generator so a long batch reaches the client file by file instead of being
+    held until the last one finishes. That buys three things a single response
+    cannot: the client can show progress, it can bound *silence* rather than
+    total duration, and a client that goes away stops the walk — the generator is
+    closed at its next yield, so no further file is touched.
+
+    Each file stays independent: a failure is a result, never an exception.
+    """
     for path in paths:
         try:
-            results.append(_apply_to_file(path, ruleset, dry_run))
+            yield _apply_to_file(path, ruleset, dry_run)
         except Exception as exc:  # noqa: BLE001 - one bad file must not sink the batch
-            results.append({
+            yield {
                 "path": path, "filename": Path(path).name, "error": str(exc),
                 "changes": [], "warnings": [], "written": False,
-            })
+            }
 
-    changed = len([r for r in results if r["changes"]])
+
+def apply_ruleset(paths: list[str], ruleset: dict, dry_run: bool) -> dict:
+    """Run a ruleset over many files and collect the results.
+
+    The non-streaming form of :func:`iter_apply_results`. ``dry_run=True`` only
+    computes changes.
+    """
+    results = list(iter_apply_results(paths, ruleset, dry_run))
     return {
         "results": results,
         "total_files": len(paths),
-        "changed_files": changed,
+        "changed_files": sum(1 for r in results if is_changed(r)),
         "dry_run": bool(dry_run),
     }
 

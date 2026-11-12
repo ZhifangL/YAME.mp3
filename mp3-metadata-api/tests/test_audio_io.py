@@ -11,6 +11,7 @@ from app.services.audio_io import (
     _target_name,
     _unsafe_name_reason,
     apply_ruleset,
+    iter_apply_results,
     read_track,
     remove_cover,
     write_cover,
@@ -195,6 +196,27 @@ def test_apply_writes_fields(audio_file: Path):
     ), dry_run=False)
     assert result["results"][0]["written"] is True
     assert read_track(str(audio_file))["fields"]["title"] == "Applied"
+
+
+def test_closing_the_apply_stream_stops_before_the_next_file(tmp_path: Path, make_audio):
+    """A client that goes away must stop the walk, not just stop listening.
+
+    The endpoint iterates this generator, and Starlette closes it when the
+    connection drops — so this is the engine's only real cancellation. It has to
+    stop between files: the one already yielded is written, the rest are not.
+    """
+    first = make_audio(tmp_path / "one.wav")
+    second = make_audio(tmp_path / "two.wav")
+    ruleset = _ruleset(
+        {"type": "WRITE", "params": {"field": "title", "value": "Streamed"}, "enabled": True},
+    )
+
+    stream = iter_apply_results([str(first), str(second)], ruleset, dry_run=False)
+    assert next(stream)["filename"] == "one.wav"
+    stream.close()
+
+    assert read_track(str(first))["fields"]["title"] == "Streamed"
+    assert read_track(str(second))["fields"]["title"] == ""
 
 
 def test_apply_reports_the_new_name_when_a_rule_renames_the_file(audio_file: Path):

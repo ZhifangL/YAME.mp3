@@ -1,7 +1,7 @@
 import { useStore } from '../store-context'
 
 export function ApplyReviewModal() {
-  const { applyReview, cancelApply, confirmApply, applying } = useStore()
+  const { applyReview, cancelApply, confirmApply, applying, applyProgress } = useStore()
   if (!applyReview) return null
 
   const changed = applyReview.results.filter((r) => r.changes.length > 0)
@@ -56,6 +56,13 @@ export function ApplyReviewModal() {
           )}
         </div>
         <div className="modal-footer">
+          {/* A batch is streamed file by file, so a long apply can say how far
+              it has got instead of only that it is busy. */}
+          {applying && applyProgress && (
+            <span className="apply-progress">
+              Applying {applyProgress.done} of {applyProgress.total}…
+            </span>
+          )}
           <button className="text-btn" onClick={cancelApply} disabled={applying}>
             Cancel
           </button>

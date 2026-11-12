@@ -1805,3 +1805,17 @@ table.tracks {
 .host-linux .nav-actions button:hover {
   background: rgba(0, 0, 0, 0.05);
 }
+
+/* ---------------------------------------------------------- batch progress */
+
+/* Transient, so it borrows the accent colour and stands out from the muted
+   counters around it. */
+.statusbar-progress,
+.apply-progress {
+  color: var(--purple-primary);
+}
+
+/* In the review modal's right-aligned footer, this sits opposite the buttons. */
+.apply-progress {
+  margin-right: auto;
+}

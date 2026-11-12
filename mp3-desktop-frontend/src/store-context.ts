@@ -1,6 +1,7 @@
 // Context + hook + shared types for the app store. Kept in its own file so
 // store.tsx only exports the provider component (fast-refresh friendly).
 import { createContext, useContext } from 'react'
+import type { ApplyProgress } from './api'
 import type {
   ApplyResponse,
   Preset,
@@ -89,6 +90,14 @@ export interface Store {
   editTrackPath: string | null
   applyReview: ApplyResponse | null
   applying: boolean
+  /**
+   * Progress of the running batch (dry run or apply), or null when idle.
+   *
+   * A batch is streamed file by file, so this is what lets the UI show that a
+   * long run is still moving — and what makes the client's timeout a bound on
+   * *silence* rather than on total duration.
+   */
+  applyProgress: ApplyProgress | null
   toast: ToastState | null
 
   init: () => void
